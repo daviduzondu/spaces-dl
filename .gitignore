@@ -1,0 +1,10 @@
+node_modules
+models
+out
+logs
+main
+*.mp3
+*.mp4
+*.wav
+*.srt
+*.png
