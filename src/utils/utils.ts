@@ -1,22 +1,9 @@
-const ffmpeg = require('fluent-ffmpeg');
-// const ffmpegPath = require('ffmpeg-static');
-const { PassThrough } = require('stream');
+import ffmpeg from 'fluent-ffmpeg';
+import fsPromises from 'fs/promises';
 const fs = require('fs');
 
 // Combine all the buffers into one single buffer and write to disk.
 // This is probably retarded. There's probably better ways of doing this. :-(
-async function combineAndWriteToDisk(buffers, outputFilePath, initMessage, completeMessage) {
-  try {
-    console.log(initMessage);
-    // Concatenate all the file buffers into a single Buffer
-    const concatenatedBuffer = Buffer.concat(buffers);
-    // Write the concatenated Buffer to a file
-    fs.writeFileSync(outputFilePath, concatenatedBuffer);
-    console.log(completeMessage);
-  } catch (error) {
-    console.error('Error combining and writing file:', error);
-  }
-}
 
 async function renderMessage(msg, type = 'info') {}
 
