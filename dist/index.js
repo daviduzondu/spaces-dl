@@ -1,19 +1,24 @@
 import * as CONSTANTS from './constants/constants.js';
 import cheerio from 'cheerio';
-// import m3u8Parser from 'm3u8-parser';
 import { getRequest, postRequest, print } from './utils/utils.js';
+import fs from 'fs-extra';
+import path from 'path';
 export class Downloader {
     username;
     password;
     headers;
     spaceMetadata;
+    mediaKey;
+    m3u8;
     id;
     isLoggedIn = false;
     $;
+    storagePath;
     constructor(options) {
         this.username = options.username;
         this.password = options.password;
         this.id = options.id;
+        this.storagePath = path.resolve(`./${this.id}/`);
         this.headers = {
             'User-Agent': 'curl/7.81.0',
             'accept': "*/*",
@@ -25,7 +30,7 @@ export class Downloader {
         print.info("Starting authentication flow");
         await this.login();
         print.info(`Retrieving space metadata: [${this.id}]`);
-        await this.setSpaceMetadata();
+        await this.setSpaceMetadataAndMediaKey();
         return this;
     }
     async login() {
@@ -123,11 +128,30 @@ export class Downloader {
             return stringWithGT[0].replace('"gt=', '');
         throw new Error('Failed to get guest token');
     }
-    async setSpaceMetadata() {
+    async setSpaceMetadataAndMediaKey() {
         const variables = CONSTANTS.VARIABLES(this.id);
         const features = CONSTANTS.FEATURES;
         const { data } = (await getRequest(CONSTANTS.SPACE_METADATA_URL(variables, features), this.headers)).data;
         this.spaceMetadata = data.audioSpace.metadata;
+        print.info('Retrieving media key...');
+        this.mediaKey = this.spaceMetadata.media_key;
+    }
+    async getPlaylist() {
+        let playlistPath = path.resolve(this.storagePath + "/" + "playlist.m3u8");
+        let playlist;
+        if (await fs.pathExists(playlistPath)) {
+            print.info('Playlist already downloaded!');
+            return await fs.readFile(playlistPath, { encoding: "utf-8" });
+        }
+        print.info('Downloading playlist');
+        const playListInfoResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
+        const playlistUrl = playListInfoResponse.data.source.location;
+        playlist = (await getRequest(playlistUrl, this.headers)).data;
+        this.cache(playlist, `playlist.m3u8`);
+        return playlist;
+    }
+    async cache(data, location) {
+        await fs.outputFile(path.resolve(this.storagePath + '/' + location), data);
     }
     async fetchChatHistory(historyEndpointURL, accessToken, userAgent) {
         let chatHistory = [];
@@ -199,6 +223,7 @@ export class Downloader {
         fs.writeFileSync('subtitles.srt', srtContent);
     }
     async generateAudio() {
+        console.log(await this.getPlaylist());
     }
     async generateVideo() {
     }

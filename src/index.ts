@@ -1,10 +1,10 @@
 import * as CONSTANTS from './constants/constants.js';
 import axios, { Axios, AxiosRequestHeaders, AxiosResponse } from 'axios';
 import cheerio from 'cheerio';
-// import m3u8Parser from 'm3u8-parser';
+import m3u8Parser from 'm3u8-parser';
 import { convertBuffersToMP3, getRequest, postRequest, print } from './utils/utils.js';
 import { DownloaderOptions, TaskHeaders } from './types.js';
-import fsPromises from 'fs/promises';
+import fs from 'fs-extra';
 import path from 'path';
 
 interface DownloaderInterface {
@@ -17,16 +17,17 @@ export class Downloader implements DownloaderInterface {
   private headers: TaskHeaders;
   private spaceMetadata: Record<string, any>;
   private mediaKey: string;
-  private m3u8: 
+  private m3u8: any;
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
+  private storagePath;
 
   constructor(options: DownloaderOptions) {
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
-
+    this.storagePath = path.resolve(`./${this.id}/`);
 
     this.headers = {
       'User-Agent': 'curl/7.81.0',
@@ -155,6 +156,29 @@ export class Downloader implements DownloaderInterface {
     this.mediaKey = this.spaceMetadata.media_key;
   }
 
+  private async getPlaylist() {
+    let playlistPath: string = path.resolve(this.storagePath + "/" + "playlist.m3u8");
+    let playlist: string;
+
+    if (await fs.pathExists(playlistPath)) {
+      print.info('Playlist already downloaded!');
+      return await fs.readFile(playlistPath, { encoding: "utf-8" });
+    }
+
+    print.info('Downloading playlist');
+    const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
+    const playlistUrl: string = playListInfoResponse.data.source.location;
+    playlist = (await getRequest(playlistUrl, this.headers)).data;
+    await this.cache(playlist, `playlist.m3u8`);
+    return playlist;
+  }
+
+
+  
+  private async cache(data: string, location: string) {
+    await fs.outputFile(path.resolve(this.storagePath + '/' + location), data);
+  }
+
 
   async fetchChatHistory(historyEndpointURL: string, accessToken: string, userAgent: TaskHeaders) {
     let chatHistory = [];
@@ -239,7 +263,7 @@ export class Downloader implements DownloaderInterface {
   }
 
   async generateAudio() {
-
+    console.log(await this.getPlaylist());
   }
 
   async generateVideo() {

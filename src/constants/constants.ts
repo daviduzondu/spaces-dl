@@ -9,6 +9,7 @@ export const URL_BASE: string = 'https://twitter.com/?mx=1';
 export const SPACE_METADATA_URL = (variables: any, features: any): string => {
     return `https://x.com/i/api/graphql/SL4eyLXdr1zWZVpXRhxZ4Q/AudioSpaceById?variables=${encodeURIComponent(JSON.stringify(variables))}&features=${encodeURIComponent(JSON.stringify(features))}`;
 };
+export const PLAYLIST_INFO_URL = (mediaKey: string): string => (`https://x.com/i/api/1.1/live_video_stream/status/${mediaKey}`)
 
 export const BEARER: string = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
