@@ -15,13 +15,18 @@ export class Downloader implements DownloaderInterface {
   private username: string;
   private password: string;
   private headers: TaskHeaders;
-  private spaceMetadata: Record<string, any>;
-  private mediaKey: string;
+  private spaceMetadata!: Record<string, any>;
+  private mediaKey!: string;
   private m3u8: any;
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
+  private playlist!: string;
+  private playlistUrl!: string;
+  private chunkBaseUrl!: string;
+  private downloadChunksCount: number = 0;
   private storagePath;
+  private chunksUrls!: string[];
 
   constructor(options: DownloaderOptions) {
     this.username = options.username;
@@ -43,6 +48,9 @@ export class Downloader implements DownloaderInterface {
     await this.login();
     print.info(`Retrieving space metadata: [${this.id}]`);
     await this.setSpaceMetadataAndMediaKey();
+    const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
+    this.playlistUrl = playListInfoResponse.data.source.location;
+    this.chunkBaseUrl = this.playlistUrl.replace(path.basename(this.playlistUrl), '');
     return this;
   }
 
@@ -157,7 +165,7 @@ export class Downloader implements DownloaderInterface {
   }
 
   private async getPlaylist() {
-    let playlistPath: string = path.resolve(this.storagePath + "/" + "playlist.m3u8");
+    let playlistPath: string = path.join(this.storagePath + "/" + "playlist.m3u8");
     let playlist: string;
 
     if (await fs.pathExists(playlistPath)) {
@@ -166,17 +174,21 @@ export class Downloader implements DownloaderInterface {
     }
 
     print.info('Downloading playlist');
-    const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
-    const playlistUrl: string = playListInfoResponse.data.source.location;
-    playlist = (await getRequest(playlistUrl, this.headers)).data;
+
+    playlist = (await getRequest(this.playlistUrl, this.headers)).data;
     await this.cache(playlist, `playlist.m3u8`);
     return playlist;
   }
 
+  private getChunksUrls(): string[] {
+    const parser = new m3u8Parser.Parser();
+    parser.push(this.playlist);
+    parser.end();
+    return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
+  }
 
-  
-  private async cache(data: string, location: string) {
-    await fs.outputFile(path.resolve(this.storagePath + '/' + location), data);
+  private async cache(data: any, location: string) {
+    await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
 
@@ -222,48 +234,41 @@ export class Downloader implements DownloaderInterface {
   }
 
   async generateSubtitle(history: []) {
-    // Helper function to convert a timestamp to SRT time format
-    const formatTime = (milliseconds, wordCount) => {
-      const date = new Date(milliseconds);
-      if (wordCount) date.setSeconds(date.getSeconds() - wordCount);
-      let hours = String(date.getUTCHours()).padStart(2, '0');
-      let minutes = String(date.getUTCMinutes()).padStart(2, '0');
-      let seconds = String(date.getUTCSeconds()).padStart(2, '0');
-      let millis = String(date.getUTCMilliseconds()).padStart(3, '0');
-      return `${hours}:${minutes}:${seconds},${millis}`;
-    };
+    // Generate subtitle.
+  }
 
-    // Destructure start and end times from spaceData
-    let { started_at: startTime, ended_at: endTime } = spaceData.audioSpace.metadata;
+  async downloadSegments(
+    chunks: string[],
+    retryCount: Record<string, number> = {},
+    maxRetries: number = 10
+  ): Promise<void> {
 
-    // Filter for spoken segments
-    let subtitles = history.filter((x) => x.type === 45);
+    for (let url of chunks) {
+      const urlPath = path.basename(url);
+      const chunkStorageLocation: string = path.join('chunks', urlPath);
+      if (!retryCount[urlPath]) retryCount[urlPath] = 0;
+      try {
+        const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
+        this.downloadChunksCount++;
+        console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
+        await this.cache(response, chunkStorageLocation);
+        // return response;
+      } catch (error: any) {
+        if (retryCount[urlPath] >= maxRetries) {
+          throw new Error(`\nFailed to fetch chunk: ${urlPath}. Giving up after ${maxRetries} retries. \n${error.message}`);
+        }
 
-    // Map subtitles to include text and formatted times
-    subtitles = subtitles.map((x, i) => {
-      let startTimestamp = Number(x.programDateTime) - Number(startTime);
-
-      let endTimestamp = (subtitles[i + 1] ? Number(subtitles[i + 1].timestamp) : Number(endTime)) - Number(startTime);
-      x.body = `[@${x.username}]\n${x.body}`;
-      return {
-        text: x.body,
-        from: formatTime(startTimestamp, 8),
-        to: formatTime(endTimestamp),
-      };
-    });
-
-    // Generate SRT content
-    let srtContent = subtitles.map((subtitle, index) => `${index + 1}\n${subtitle.from} --> ${subtitle.to}\n${subtitle.text}\n`).join('\n');
-
-    console.log(srtContent);
-
-    // Optional: Write the content to a file (uncomment if needed)
-    const fs = require('fs');
-    fs.writeFileSync('subtitles.srt', srtContent);
+        retryCount[urlPath] += 1;
+        console.error(`Failed to fetch ${urlPath} .................................. Retrying [${retryCount[urlPath]}/${maxRetries}]`);
+        return this.downloadSegments([url], retryCount, maxRetries);
+      }
+    }
   }
 
   async generateAudio() {
-    console.log(await this.getPlaylist());
+    this.playlist = await this.getPlaylist();
+    this.chunksUrls = this.getChunksUrls();
+    await this.downloadSegments(this.chunksUrls);
   }
 
   async generateVideo() {
@@ -278,5 +283,4 @@ export class Downloader implements DownloaderInterface {
     print.info("Cleaning up!");
     print.success("Done!");
   }
-
 }
