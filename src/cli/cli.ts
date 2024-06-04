@@ -47,4 +47,4 @@ program.parse(process.argv);
 
 const options: DownloaderOptions = program.opts();
 
-const task = new Downloader(options).init();
+const task = await new Downloader(options).init();
