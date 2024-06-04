@@ -1,10 +1,12 @@
 // import axios from 'axios';
 
-const path = require('path');
+import path from 'path';
+import axios from 'axios';
+import m3u8Parser from 'm3u8-parser';
 // import cheerio from 'cheerio';
-const axios = require('axios');
-const cheerio = require('cheerio');
-const m3u8Parser = require('m3u8-parser');
+// const axios = require('axios');
+// const cheerio = require('cheerio');
+// const m3u8Parser = require('m3u8-parser');
 
 
 const { combineAndWriteToDisk, convertBuffersToMP3 } = require('./utils/utils.js');

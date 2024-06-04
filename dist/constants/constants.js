@@ -1,14 +1,12 @@
-export const URL_FLOW_1: string = 'https://x.com/i/api/1.1/onboarding/task.json?flow_name=login';
-export const URL_FLOW_2: string = 'https://x.com/i/api/1.1/onboarding/task.json';
-export const PERISCOPE_AUTH_URL: string = 'https://x.com/i/api/1.1/onboarding/task.json';
-export const PERISCOPE_LOGIN_URL: string = 'https://proxsee.pscp.tv/api/v2/loginTwitterToken';
-export const ACCESS_CHAT_URL: string = 'https://proxsee.pscp.tv/api/v2/accessChat';
-export const URL_BASE: string = 'https://twitter.com/?mx=1';
-export const BEARER: string = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
-
+export const URL_FLOW_1 = 'https://x.com/i/api/1.1/onboarding/task.json?flow_name=login';
+export const URL_FLOW_2 = 'https://x.com/i/api/1.1/onboarding/task.json';
+export const PERISCOPE_AUTH_URL = 'https://x.com/i/api/1.1/onboarding/task.json';
+export const PERISCOPE_LOGIN_URL = 'https://proxsee.pscp.tv/api/v2/loginTwitterToken';
+export const ACCESS_CHAT_URL = 'https://proxsee.pscp.tv/api/v2/accessChat';
+export const URL_BASE = 'https://twitter.com/?mx=1';
+export const BEARER = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 export const LOGIN_FLOW_SUBTASK_DATA = {
     '': { input: {} },
-
     'LoginJsInstrumentationSubtask': {
         input: {
             subtask_inputs: [
@@ -19,8 +17,7 @@ export const LOGIN_FLOW_SUBTASK_DATA = {
             ],
         }
     },
-
-    'LoginEnterUserIdentifierSSO': (username: string) => ({
+    'LoginEnterUserIdentifierSSO': (username) => ({
         input: {
             subtask_inputs: [
                 {
@@ -38,7 +35,7 @@ export const LOGIN_FLOW_SUBTASK_DATA = {
             ]
         }
     }),
-    'LoginEnterPassword': (password: string) => ({
+    'LoginEnterPassword': (password) => ({
         input: {
             subtask_inputs: [
                 {
@@ -48,7 +45,6 @@ export const LOGIN_FLOW_SUBTASK_DATA = {
             ],
         }
     }),
-
     "AccountDuplicationCheck": {
         input: {
             subtask_inputs: [
@@ -59,10 +55,8 @@ export const LOGIN_FLOW_SUBTASK_DATA = {
             ],
         }
     }
-}
-
-export const variables: {} = (id: string) => ({ id, isMetatagsQuery: true, withReplays: true, withListeners: true })
-
+};
+export const variables = (id) => ({ id, isMetatagsQuery: true, withReplays: true, withListeners: true });
 export const FEATURES = {
     rweb_tipjar_consumption_enabled: true,
     responsive_web_graphql_exclude_directive_enabled: true,
@@ -91,7 +85,6 @@ export const FEATURES = {
     spaces_2022_h2_clipping: false,
     spaces_2022_h2_spaces_communities: false,
 };
-
 export const LANGUAGES = {
     en: 'english',
     zh: 'chinese',

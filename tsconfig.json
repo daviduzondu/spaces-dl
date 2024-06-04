@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "module": "ESNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "target": "ES6",
+    "module": "NodeNext",
+    "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "target": "es2022",
-    "allowJs": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "NodeNext"
   },
-  "ts-node": {
-    "esm": true
-}
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }
