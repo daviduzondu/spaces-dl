@@ -4,6 +4,9 @@ export const PERISCOPE_AUTH_URL = 'https://x.com/i/api/1.1/onboarding/task.json'
 export const PERISCOPE_LOGIN_URL = 'https://proxsee.pscp.tv/api/v2/loginTwitterToken';
 export const ACCESS_CHAT_URL = 'https://proxsee.pscp.tv/api/v2/accessChat';
 export const URL_BASE = 'https://twitter.com/?mx=1';
+export const SPACE_METADATA_URL = (variables, features) => {
+    return `https://x.com/i/api/graphql/SL4eyLXdr1zWZVpXRhxZ4Q/AudioSpaceById?variables=${encodeURIComponent(JSON.stringify(variables))}&features=${encodeURIComponent(JSON.stringify(features))}`;
+};
 export const BEARER = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 export const LOGIN_FLOW_SUBTASK_DATA = {
     '': { input: {} },
@@ -56,7 +59,7 @@ export const LOGIN_FLOW_SUBTASK_DATA = {
         }
     }
 };
-export const variables = (id) => ({ id, isMetatagsQuery: true, withReplays: true, withListeners: true });
+export const VARIABLES = (id) => ({ id, isMetatagsQuery: true, withReplays: true, withListeners: true });
 export const FEATURES = {
     rweb_tipjar_consumption_enabled: true,
     responsive_web_graphql_exclude_directive_enabled: true,

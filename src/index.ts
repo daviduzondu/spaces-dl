@@ -8,13 +8,16 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 
 interface DownloaderInterface {
-
+  [key: string]: any
 }
 
 export class Downloader implements DownloaderInterface {
   private username: string;
   private password: string;
   private headers: TaskHeaders;
+  private spaceMetadata: Record<string, any>;
+  private mediaKey: string;
+  private m3u8: 
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
@@ -34,9 +37,12 @@ export class Downloader implements DownloaderInterface {
 
   }
 
-  async init() {
+  async init(): Promise<Downloader> {
     print.info("Starting authentication flow")
     await this.login();
+    print.info(`Retrieving space metadata: [${this.id}]`);
+    await this.setSpaceMetadataAndMediaKey();
+    return this;
   }
 
   async login() {
@@ -140,6 +146,16 @@ export class Downloader implements DownloaderInterface {
     throw new Error('Failed to get guest token');
   }
 
+  private async setSpaceMetadataAndMediaKey() {
+    const variables = CONSTANTS.VARIABLES(this.id);
+    const features = CONSTANTS.FEATURES;
+    const { data } = (await getRequest(CONSTANTS.SPACE_METADATA_URL(variables, features), this.headers)).data;
+    this.spaceMetadata = data.audioSpace.metadata;
+    print.info('Retrieving media key...');
+    this.mediaKey = this.spaceMetadata.media_key;
+  }
+
+
   async fetchChatHistory(historyEndpointURL: string, accessToken: string, userAgent: TaskHeaders) {
     let chatHistory = [];
     let previousCursor = '';
@@ -220,6 +236,23 @@ export class Downloader implements DownloaderInterface {
     // Optional: Write the content to a file (uncomment if needed)
     const fs = require('fs');
     fs.writeFileSync('subtitles.srt', srtContent);
+  }
+
+  async generateAudio() {
+
+  }
+
+  async generateVideo() {
+
+  }
+
+  async generateTranscription() {
+
+  }
+
+  async cleanup() {
+    print.info("Cleaning up!");
+    print.success("Done!");
   }
 
 }

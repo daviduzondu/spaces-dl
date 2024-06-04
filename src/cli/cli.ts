@@ -9,10 +9,11 @@ program
     .name('spaces-dl')
     .description('CLI to download recorded Twitter Spaces')
     .version('0.0.1')
+    .option('-a, --audio', 'generate audio')
     .option('-i, --id <id>', 'A valid ID for a recorded Twitter Space')
     .option('-u, --username <username>', 'a valid twitter username without the @')
     .option('-p, --password <password>', 'a valid password for the username')
-    .option('-o, --output <path>', 'output path for the recorded audio')
+    .option('-o, --output <path>', 'output path for the recorded audio/video')
     .option('-v, --video', 'create a video from the twitter space')
     .option('-t, --transcribe', 'Transcribe the audio. Transcriptions are stored in a .srt file')
     .option('-l, --language <language>', 'Supported language code for Twitter Space audio', (value) => {
@@ -25,6 +26,11 @@ program
     .option('-w, --whisper-path <path>', 'Installation path to the whisper.cpp file')
     .option('-pl, --print-lang', 'Print all supported languages for transcription')
     .action((options) => {
+        if (!options.id) {
+            console.error("Error: --id option required");
+            process.exit(1);
+        }
+
         if (options.printLang) {
             console.log('Supported languages for transcription:' + '\n');
             console.log("CODE\t", "LANGUAGE\n")
@@ -47,4 +53,9 @@ program.parse(process.argv);
 
 const options: DownloaderOptions = program.opts();
 
-const task = await new Downloader(options).init();
+const task: Downloader = await new Downloader(options).init();
+if (options.audio) await task.generateAudio();
+if (options.video) await task.generateVideo();
+if (options.transcribe) await task.generateTranscription();
+
+await task.cleanup();
