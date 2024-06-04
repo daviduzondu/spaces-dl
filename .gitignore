@@ -1,6 +1,7 @@
 node_modules
 models
 out
+dist
 logs
 main
 *.mp3
