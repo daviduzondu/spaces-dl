@@ -1,16 +1,18 @@
 const path = require("path");
 const { whisper } = require(path.join(
   __dirname,
-  "../../build/Release/addon.node"
+  "./build/addon.node"
 ));
+
+console.log(whisper);
 const { promisify } = require("util");
 
 const whisperAsync = promisify(whisper);
 
 const whisperParams = {
   language: "en",
-  model: path.join(__dirname, "../../models/ggml-base.en.bin"),
-  fname_inp: path.join(__dirname, "../../samples/jfk.wav"),
+  model: path.join(__dirname, "./models/ggml-base.en.bin"),
+  fname_inp: path.join(__dirname, "./jfk.wav"),
   use_gpu: true,
   flash_attn: false,
   no_prints: true,
@@ -20,9 +22,10 @@ const whisperParams = {
   audio_ctx: 0,
 };
 
-const arguments = process.argv.slice(2);
+// const arguments = process.argv.slice(2);
+
 const params = Object.fromEntries(
-  arguments.reduce((pre, item) => {
+  process.argv.slice(2).reduce((pre, item) => {
     if (item.startsWith("--")) {
       const [key, value] = item.slice(2).split("=");
       if (key === "audio_ctx") {
