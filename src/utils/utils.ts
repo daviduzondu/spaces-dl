@@ -66,6 +66,9 @@ export const print = {
   },
   default: (message: string) => {
     console.log(`${chalk.bgBlue('[*]')} ${message}`);
+  },
+  error: (message: string) => {
+    console.log(`${chalk.bgRed("[ERROR]")} ${message}`)
   }
 };
 

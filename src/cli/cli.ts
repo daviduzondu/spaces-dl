@@ -22,7 +22,7 @@ program
         }
         return value;
     })
-    .option('-w, --whisper-path <path>', 'Installation path to the whisper.cpp file')
+    .option('-m, --model-path', 'Path to the Whisper model to use')
     .option('-pl, --print-lang', 'Print all supported languages for transcription')
     .action((options) => {
         if (options.printLang) {

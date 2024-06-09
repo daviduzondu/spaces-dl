@@ -6,6 +6,8 @@ import { convertBuffersToMP3, getRequest, postRequest, print } from './utils/uti
 import { DownloaderOptions, TaskHeaders } from './types.js';
 import fsPromises from 'fs/promises';
 import path from 'path';
+import { whisper } from './lib/whisper.js';
+import ffmpeg from 'fluent-ffmpeg';
 
 interface DownloaderInterface {
 
@@ -14,12 +16,14 @@ interface DownloaderInterface {
 export class Downloader implements DownloaderInterface {
   private username: string;
   private password: string;
+  private options!: DownloaderOptions;
   private headers: TaskHeaders;
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
 
   constructor(options: DownloaderOptions) {
+    this.options = options;
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
