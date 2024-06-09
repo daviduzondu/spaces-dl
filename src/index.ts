@@ -2,10 +2,13 @@ import * as CONSTANTS from './constants/constants.js';
 import axios, { Axios, AxiosRequestHeaders, AxiosResponse } from 'axios';
 import cheerio from 'cheerio';
 import m3u8Parser from 'm3u8-parser';
+import { PassThrough } from 'stream';
 import { convertBuffersToMP3, getRequest, postRequest, print } from './utils/utils.js';
 import { ChatMessage, DownloaderOptions, Message, TaskHeaders } from './types.js';
 import fs from 'fs-extra';
 import path from 'path';
+import { whisper } from './lib/whisper.js';
+import ffmpeg from 'fluent-ffmpeg';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -14,6 +17,7 @@ interface DownloaderInterface {
 export class Downloader implements DownloaderInterface {
   private username: string;
   private password: string;
+  private options!: DownloaderOptions;
   private headers: TaskHeaders;
   private spaceMetadata!: Record<string, any>;
   private mediaKey!: string;
@@ -32,6 +36,7 @@ export class Downloader implements DownloaderInterface {
   private chatHistory: ChatMessage[] = [];
 
   constructor(options: DownloaderOptions) {
+    this.options = options;
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
@@ -181,7 +186,7 @@ export class Downloader implements DownloaderInterface {
     print.info('Downloading playlist');
 
     playlist = (await getRequest(this.playlistUrl, this.headers)).data;
-    await this.cache(playlist, `playlist.m3u8`);
+    await this.saveToDisk(playlist, `playlist.m3u8`);
     return playlist;
   }
 
@@ -193,7 +198,7 @@ export class Downloader implements DownloaderInterface {
     return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
   }
 
-  private async cache(data: any, location: string) {
+  private async saveToDisk(data: any, location: string) {
     await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
@@ -242,7 +247,7 @@ export class Downloader implements DownloaderInterface {
 
         // Check if there is a new cursor or if there are no more messages
         if (!response.cursor || response.messages.length === 0) {
-          await this.cache(JSON.stringify({ chatHistory: this.chatHistory }), chatHistoryPath);
+          await this.saveToDisk(JSON.stringify({ chatHistory: this.chatHistory }), chatHistoryPath);
           break;
         }
         // Update the cursor for the next request
@@ -279,16 +284,22 @@ export class Downloader implements DownloaderInterface {
 
   async generateSubtitle() {
     print.info('Starting to generate subtitles');
-    const { endpoint, accessToken } = await this.authenticatePeriscope();
+
+    await whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
+
+
+    // Note: Do not remove
+    // const { endpoint, accessToken } = await this.authenticatePeriscope();
     // Fetch Chat History
-    this.chatHistory = await this.downloadChatHistory(endpoint, accessToken);
-    console.log(this.chatHistory);
+    // this.chatHistory = await this.downloadChatHistory(endpoint, accessToken);
+    // whisper();
+    // console.log(this.chatHistory);
     // const speeches = this.chatHistory.playload
     // Parse History
     // Generate subtitle
   }
 
-  async downloadSegments(
+  private async downloadSegments(
     chunks: string[],
     retryCount: Record<string, number> = {},
     maxRetries: number = 10
@@ -296,12 +307,12 @@ export class Downloader implements DownloaderInterface {
 
     // Check cache for the downloaded chunks
 
-
     for (let url of chunks) {
       const urlPath = path.basename(url);
       const chunkStorageLocation: string = path.join('chunks', urlPath);
       if (!retryCount[urlPath]) retryCount[urlPath] = 0;
       if (await fs.pathExists(path.resolve(this.storagePath + "/" + chunkStorageLocation))) {
+        this.downloadChunksCount++;
         print.info(`${urlPath} already downloaded! Skipped!`);
         // break;
       } else {
@@ -309,7 +320,7 @@ export class Downloader implements DownloaderInterface {
           const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
           this.downloadChunksCount++;
           console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
-          await this.cache(response, chunkStorageLocation);
+          await this.saveToDisk(response, chunkStorageLocation);
           // return response;
         } catch (error: any) {
           if (retryCount[urlPath] >= maxRetries) {
@@ -324,19 +335,55 @@ export class Downloader implements DownloaderInterface {
     }
   }
 
+
+  private async convertSegmentsToWav() {
+    await fs.ensureDir(path.join(this.storagePath, 'out/'));
+    const passThroughStream = new PassThrough();
+    const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.spaceMetadata.title}.wav`);
+    // const ffmpegCommand = ffmpeg();
+    const chunks: string[] = await fs.readdir(path.join(this.storagePath, 'chunks'), { encoding: "utf-8" });
+    if (chunks.length === 0) {
+      throw new Error('Failed to fetch chunks saved on disk.');
+    }
+    for (const chunkPath of chunks) {
+      passThroughStream.write(await fs.readFile(path.join(this.storagePath, 'chunks/', chunkPath)));
+      // ffmpegCommand.input(path.join(this.storagePath, 'chunks/', chunkPath))
+    };
+    passThroughStream.end();
+
+
+    // Convert .aac to .wav
+    // Taken from https://github.com/ggerganov/whisper.cpp#:~:text=ffmpeg%20%2Di%20input.mp3%20%2Dar%2016000%20%2Dac%201%20%2Dc%3Aa%20pcm_s16le%20output.wav
+
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(passThroughStream)
+        .inputFormat('aac')
+        .audioFrequency(16000) // Set sample rate to 16 kHz
+        .audioChannels(1)      // Set audio channels to mono
+        .audioCodec('pcm_s16le') // Set audio codec to pcm_s16le
+        .toFormat('wav')        // Set output format to wav
+        .on('error', (err) => {
+          reject(`Error ${err.message}`);
+        })
+        .on('end', () => {
+          resolve();
+          console.log('Conversion to output.wav completed.');
+        })
+        .save(finalOutputFilePath);
+    })
+  }
+
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
     await this.downloadSegments(this.chunksUrls);
+    await this.convertSegmentsToWav();
   }
 
   async generateVideo() {
 
   }
 
-  async generateTranscription() {
-
-  }
 
   async cleanup() {
     print.info("Cleaning up!");

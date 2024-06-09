@@ -4,7 +4,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "tsc; cp -r src/bin dist/bin",
+    "build": "tsc; cp -r src/bin dist/",
     "start": "tsc --watch --project ./tsconfig.json",
     "dev": "bun src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.24",
     "@types/fs-extra": "^11.0.4",
+    "@types/shelljs": "^0.8.15",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
