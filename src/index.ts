@@ -185,45 +185,135 @@ export class Downloader implements DownloaderInterface {
     return chatHistory;
   }
 
-  async generateSubtitle(history: []) {
-    // Helper function to convert a timestamp to SRT time format
-    const formatTime = (milliseconds, wordCount) => {
-      const date = new Date(milliseconds);
-      if (wordCount) date.setSeconds(date.getSeconds() - wordCount);
-      let hours = String(date.getUTCHours()).padStart(2, '0');
-      let minutes = String(date.getUTCMinutes()).padStart(2, '0');
-      let seconds = String(date.getUTCSeconds()).padStart(2, '0');
-      let millis = String(date.getUTCMilliseconds()).padStart(3, '0');
-      return `${hours}:${minutes}:${seconds},${millis}`;
+  private async authenticatePeriscope(): Promise<{ endpoint: string; accessToken: string; }> {
+    // Retrieve the authentication token from Periscope
+    print.info("Retrieving Periscope auth token");
+    const { token: periscopeAuthToken }: { token: string } = (await getRequest(CONSTANTS.PERISCOPE_AUTH_URL, this.headers)).data;
+
+    // Retrieve the cookie from Periscope
+    print.info('Retrieving Periscope cookie');
+
+
+    const { cookie: periscopeCookie }: { cookie: string } = (
+      await postRequest(CONSTANTS.PERISCOPE_LOGIN_URL, this.headers, {
+        create_user: false,
+        direct: true,
+        jwt: periscopeAuthToken,
+        vendor_id: 'm5-proxsee-login-a2011357b73e',
+      })
+    ).data;
+
+    const { access_token: pAccessToken, endpoint: pEndpoint, signer_key: pSignerKey, room_id: pRoomId } = (await postRequest(CONSTANTS.ACCESS_CHAT_URL, this.headers, { chat_token: this.chatToken, cookie: periscopeCookie })).data;
+
+    return { endpoint: pEndpoint + '/chatapi/v1/history', accessToken: pAccessToken }
+  }
+
+  async generateSubtitle() {
+    print.info('Starting to generate subtitles');
+
+    whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
+
+
+    // Note: Do not remove
+    // const { endpoint, accessToken } = await this.authenticatePeriscope();
+    // Fetch Chat History
+    // this.chatHistory = await this.downloadChatHistory(endpoint, accessToken);
+    // whisper();
+    // console.log(this.chatHistory);
+    // const speeches = this.chatHistory.playload
+    // Parse History
+    // Generate subtitle
+  }
+
+  private async downloadSegments(
+    chunks: string[],
+    retryCount: Record<string, number> = {},
+    maxRetries: number = 10
+  ): Promise<void> {
+
+    // Check cache for the downloaded chunks
+
+    for (let url of chunks) {
+      const urlPath = path.basename(url);
+      const chunkStorageLocation: string = path.join('chunks', urlPath);
+      if (!retryCount[urlPath]) retryCount[urlPath] = 0;
+      if (await fs.pathExists(path.resolve(this.storagePath + "/" + chunkStorageLocation))) {
+        this.downloadChunksCount++;
+        print.info(`${urlPath} already downloaded! Skipped!`);
+        // break;
+      } else {
+        try {
+          const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
+          this.downloadChunksCount++;
+          console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
+          await this.saveToDisk(response, chunkStorageLocation);
+          // return response;
+        } catch (error: any) {
+          if (retryCount[urlPath] >= maxRetries) {
+            throw new Error(`\nFailed to fetch chunk: ${urlPath}. Giving up after ${maxRetries} retries. \n${error.message}`);
+          }
+
+          retryCount[urlPath] += 1;
+          console.error(`Failed to fetch ${urlPath} .................................. Retrying [${retryCount[urlPath]}/${maxRetries}]`);
+          return this.downloadSegments([url], retryCount, maxRetries);
+        }
+      }
+    }
+  }
+
+
+  private async convertSegmentsToWav() {
+    await fs.ensureDir(path.join(this.storagePath, 'out/'));
+    const passThroughStream = new PassThrough();
+    const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.spaceMetadata.title}.wav`);
+    // const ffmpegCommand = ffmpeg();
+    const chunks: string[] = await fs.readdir(path.join(this.storagePath, 'chunks'), { encoding: "utf-8" });
+    if (chunks.length === 0) {
+      throw new Error('Failed to fetch chunks saved on disk.');
+    }
+    for (const chunkPath of chunks) {
+      passThroughStream.write(await fs.readFile(path.join(this.storagePath, 'chunks/', chunkPath)));
+      // ffmpegCommand.input(path.join(this.storagePath, 'chunks/', chunkPath))
     };
+    passThroughStream.end();
 
-    // Destructure start and end times from spaceData
-    let { started_at: startTime, ended_at: endTime } = spaceData.audioSpace.metadata;
 
-    // Filter for spoken segments
-    let subtitles = history.filter((x) => x.type === 45);
+    // Convert .aac to .wav
+    // Taken from https://github.com/ggerganov/whisper.cpp#:~:text=ffmpeg%20%2Di%20input.mp3%20%2Dar%2016000%20%2Dac%201%20%2Dc%3Aa%20pcm_s16le%20output.wav
 
-    // Map subtitles to include text and formatted times
-    subtitles = subtitles.map((x, i) => {
-      let startTimestamp = Number(x.programDateTime) - Number(startTime);
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(passThroughStream)
+        .inputFormat('aac')
+        .audioFrequency(16000) // Set sample rate to 16 kHz
+        .audioChannels(1)      // Set audio channels to mono
+        .audioCodec('pcm_s16le') // Set audio codec to pcm_s16le
+        .toFormat('wav')        // Set output format to wav
+        .on('error', (err) => {
+          reject(`Error ${err.message}`);
+        })
+        .on('end', () => {
+          resolve();
+          console.log('Conversion to output.wav completed.');
+        })
+        .save(finalOutputFilePath);
+    })
+  }
 
-      let endTimestamp = (subtitles[i + 1] ? Number(subtitles[i + 1].timestamp) : Number(endTime)) - Number(startTime);
-      x.body = `[@${x.username}]\n${x.body}`;
-      return {
-        text: x.body,
-        from: formatTime(startTimestamp, 8),
-        to: formatTime(endTimestamp),
-      };
-    });
+  async generateAudio() {
+    this.playlist = await this.getPlaylist();
+    this.chunksUrls = this.parsePlaylist();
+    await this.downloadSegments(this.chunksUrls);
+    await this.convertSegmentsToWav();
+  }
 
-    // Generate SRT content
-    let srtContent = subtitles.map((subtitle, index) => `${index + 1}\n${subtitle.from} --> ${subtitle.to}\n${subtitle.text}\n`).join('\n');
+  async generateVideo() {
 
-    console.log(srtContent);
+  }
 
-    // Optional: Write the content to a file (uncomment if needed)
-    const fs = require('fs');
-    fs.writeFileSync('subtitles.srt', srtContent);
+
+  async cleanup() {
+    print.info("Cleaning up!");
+    print.success("Done!");
   }
 
 }
