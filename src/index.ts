@@ -285,7 +285,7 @@ export class Downloader implements DownloaderInterface {
   async generateSubtitle() {
     print.info('Starting to generate subtitles');
 
-    await whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
+    whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
 
 
     // Note: Do not remove

@@ -25,27 +25,27 @@ if (platform === 'linux' || platform === 'darwin') {
 
 
 export const whisper = async (args: string[]) => {
-    return new Promise<void>((resolve, reject) => {
-        console.log('Args:', args);
+    // return new Promise<void>((resolve, reject) => {
+    console.log('Args:', args);
 
-        const command = `${whisperCompiledBinaryPath} ${args.join(' ')}`;
+    const command = `${whisperCompiledBinaryPath} ${args.join(' ')}`;
 
-        const child = exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error: ${stderr}`);
-                reject(new Error(`Error: ${stderr}`));
-                return;
-            }
-            console.log(`stdout: ${stdout}`);
-            resolve();
-        });
-
-        child.stdout?.on('data', (data) => {
-            console.log(data);
-        });
-
-        child.stderr?.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
+    const child = exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error: ${stderr}`);
+            // reject(new Error(`Error: ${stderr}`));
+            return;
+        }
+        console.log(`stdout: ${stdout}`);
+        // resolve();
     });
+
+    child.stdout?.on('data', (data) => {
+        console.log(data);
+    });
+
+    child.stderr?.on('data', (data) => {
+        console.error(`stderr: ${data}`);
+    });
+    // });
 };
