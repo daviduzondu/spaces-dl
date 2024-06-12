@@ -5,11 +5,8 @@ dist
 logs
 main
 1jMJgmQnggPKL
-*.exe
 *.mp3
 *.mp4
 *.wav
 *.srt
 *.png
-windows
-unix

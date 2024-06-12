@@ -1,16 +1,17 @@
 import * as CONSTANTS from './constants/constants.js';
 import axios, { Axios, AxiosRequestHeaders, AxiosResponse } from 'axios';
 import cheerio from 'cheerio';
-// import m3u8Parser from 'm3u8-parser';
+import m3u8Parser from 'm3u8-parser';
+import { PassThrough } from 'stream';
 import { convertBuffersToMP3, getRequest, postRequest, print } from './utils/utils.js';
-import { DownloaderOptions, TaskHeaders } from './types.js';
-import fsPromises from 'fs/promises';
+import { ChatMessage, DownloaderOptions, Message, TaskHeaders } from './types.js';
+import fs from 'fs-extra';
 import path from 'path';
 import { whisper } from './lib/whisper.js';
 import ffmpeg from 'fluent-ffmpeg';
 
 interface DownloaderInterface {
-
+  [key: string]: any
 }
 
 export class Downloader implements DownloaderInterface {
@@ -18,16 +19,28 @@ export class Downloader implements DownloaderInterface {
   private password: string;
   private options!: DownloaderOptions;
   private headers: TaskHeaders;
+  private spaceMetadata!: Record<string, any>;
+  private mediaKey!: string;
+  private m3u8: any;
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
+  private playlist!: string;
+  private playlistUrl!: string;
+  private chunkBaseUrl!: string;
+  private playlistManifest!: Record<string, any>;
+  private downloadChunksCount: number = 0;
+  private storagePath;
+  private chunksUrls!: string[];
+  private chatToken!: string;
+  private chatHistory: ChatMessage[] = [];
 
   constructor(options: DownloaderOptions) {
     this.options = options;
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
-
+    this.storagePath = path.resolve(`./${this.id}/`);
 
     this.headers = {
       'User-Agent': 'curl/7.81.0',
@@ -38,9 +51,16 @@ export class Downloader implements DownloaderInterface {
 
   }
 
-  async init() {
+  async init(): Promise<Downloader> {
     print.info("Starting authentication flow")
     await this.login();
+    print.info(`Retrieving space metadata: [${this.id}]`);
+    await this.setSpaceMetadataAndMediaKey();
+    const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
+    this.playlistUrl = playListInfoResponse.data.source.location;
+    this.chatToken = playListInfoResponse.data.chatToken;
+    this.chunkBaseUrl = this.playlistUrl.replace(path.basename(this.playlistUrl), '');
+    return this;
   }
 
   async login() {
@@ -144,15 +164,72 @@ export class Downloader implements DownloaderInterface {
     throw new Error('Failed to get guest token');
   }
 
-  async fetchChatHistory(historyEndpointURL: string, accessToken: string, userAgent: TaskHeaders) {
-    let chatHistory = [];
+  private async setSpaceMetadataAndMediaKey() {
+    const variables = CONSTANTS.VARIABLES(this.id);
+    const features = CONSTANTS.FEATURES;
+    const { data } = (await getRequest(CONSTANTS.SPACE_METADATA_URL(variables, features), this.headers)).data;
+    this.spaceMetadata = data.audioSpace.metadata;
+    print.info('Retrieving media key...');
+    this.mediaKey = this.spaceMetadata.media_key;
+  }
+
+  private async getPlaylist() {
+    let playlistPath: string = path.join(this.storagePath + "/" + "playlist.m3u8");
+    let playlist: string;
+
+    if (await fs.pathExists(playlistPath)) {
+      print.info('Playlist already downloaded!');
+      return await fs.readFile(playlistPath, { encoding: "utf-8" });
+      // return;
+    }
+
+    print.info('Downloading playlist');
+
+    playlist = (await getRequest(this.playlistUrl, this.headers)).data;
+    await this.saveToDisk(playlist, `playlist.m3u8`);
+    return playlist;
+  }
+
+  private parsePlaylist(): string[] {
+    const parser = new m3u8Parser.Parser();
+    parser.push(this.playlist);
+    parser.end();
+    this.playlistManifest = parser.manifest;
+    return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
+  }
+
+  private async saveToDisk(data: any, location: string) {
+    await fs.outputFile(path.join(this.storagePath + '/' + location), data);
+  }
+
+  private async downloadChatHistory(historyEndpointURL: string, accessToken: string) {
     let previousCursor = '';
     let index = 0;
+    const chatHistoryPath = "history.json";
+
+    function formatChatHistory(history: { messages: Message[], cursor: string }[]): ChatMessage[] {
+      history.forEach((x: ChatMessage) => {
+        x.messages.forEach((y: Message) => {
+          y.payload = JSON.parse(y.payload);
+          y.payload.body = JSON.parse(y.payload.body);
+        })
+        x.messages = x.messages.filter((y: any) => y.body.type === 45);
+      });
+      return history.map((x: any) => [...x.messages]).flat();
+    }
+
+    if (await fs.pathExists(path.resolve(this.storagePath + '/' + chatHistoryPath))) {
+      print.info("Retrieving chat history from cache");
+      return formatChatHistory(JSON.parse(await fs.readFile(path.resolve(this.storagePath + '/' + chatHistoryPath), { encoding: "utf-8" })).chatHistory);
+    }
+
+
+    print.info('Attempting to download chat history');
     while (true) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 300));
         const response = (
-          await postRequest(historyEndpointURL, userAgent, {
+          await postRequest(historyEndpointURL, this.headers, {
             cursor: previousCursor,
             access_token: accessToken,
             limit: 1000,
@@ -162,27 +239,24 @@ export class Downloader implements DownloaderInterface {
         ).data;
 
         // Log details for debugging purposes
-        console.log(chatHistory.length, ' ', previousCursor, ' ', response.cursor, ' ', response.messages.length);
+        console.log(this.chatHistory.length, ' ', previousCursor, ' ', response.cursor, ' ', response.messages.length);
 
-        // Add new messages to chatHistory
-        chatHistory.push(...response.messages);
+        // Add new messages to this.chatHistory
+        this.chatHistory.push(response);
         index++;
 
         // Check if there is a new cursor or if there are no more messages
         if (!response.cursor || response.messages.length === 0) {
+          await this.saveToDisk(JSON.stringify({ chatHistory: this.chatHistory }), chatHistoryPath);
           break;
         }
-        // if (index === 15) {
-        //   break;
-        // }
-
         // Update the cursor for the next request
         previousCursor = response.cursor;
       } catch (error) {
         throw new Error('Something went wrong! ' + error);
       }
     }
-    return chatHistory;
+    return formatChatHistory(this.chatHistory);
   }
 
   private async authenticatePeriscope(): Promise<{ endpoint: string; accessToken: string; }> {
@@ -315,5 +389,4 @@ export class Downloader implements DownloaderInterface {
     print.info("Cleaning up!");
     print.success("Done!");
   }
-
 }
