@@ -40,7 +40,7 @@ export class Downloader implements DownloaderInterface {
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
-    this.storagePath = path.resolve(`./${this.id}/`);
+    this.storagePath = path.resolve(`./task-${this.id}/`);
 
     this.headers = {
       'User-Agent': 'curl/7.81.0',
