@@ -243,7 +243,7 @@ export class Downloader {
     }
     async generateSubtitle() {
         print.info('Starting to generate subtitles');
-        whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
+        whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}.wav'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
         // Note: Do not remove
         // const { endpoint, accessToken } = await this.authenticatePeriscope();
         // Fetch Chat History
