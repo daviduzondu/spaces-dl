@@ -34,6 +34,7 @@ export class Downloader implements DownloaderInterface {
   private chunksUrls!: string[];
   private chatToken!: string;
   private chatHistory: ChatMessage[] = [];
+  private audioGenerated: Boolean = false;
 
   constructor(options: DownloaderOptions) {
     this.options = options;
@@ -202,101 +203,9 @@ export class Downloader implements DownloaderInterface {
     await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
-  private async downloadChatHistory(historyEndpointURL: string, accessToken: string) {
-    let previousCursor = '';
-    let index = 0;
-    const chatHistoryPath = "history.json";
-
-    function formatChatHistory(history: { messages: Message[], cursor: string }[]): ChatMessage[] {
-      history.forEach((x: ChatMessage) => {
-        x.messages.forEach((y: Message) => {
-          y.payload = JSON.parse(y.payload);
-          y.payload.body = JSON.parse(y.payload.body);
-        })
-        x.messages = x.messages.filter((y: any) => y.body.type === 45);
-      });
-      return history.map((x: any) => [...x.messages]).flat();
-    }
-
-    if (await fs.pathExists(path.resolve(this.storagePath + '/' + chatHistoryPath))) {
-      print.info("Retrieving chat history from cache");
-      return formatChatHistory(JSON.parse(await fs.readFile(path.resolve(this.storagePath + '/' + chatHistoryPath), { encoding: "utf-8" })).chatHistory);
-    }
-
-
-    print.info('Attempting to download chat history');
-    while (true) {
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const response = (
-          await postRequest(historyEndpointURL, this.headers, {
-            cursor: previousCursor,
-            access_token: accessToken,
-            limit: 1000,
-            quick_get: true,
-            since: null,
-          })
-        ).data;
-
-        // Log details for debugging purposes
-        console.log(this.chatHistory.length, ' ', previousCursor, ' ', response.cursor, ' ', response.messages.length);
-
-        // Add new messages to this.chatHistory
-        this.chatHistory.push(response);
-        index++;
-
-        // Check if there is a new cursor or if there are no more messages
-        if (!response.cursor || response.messages.length === 0) {
-          await this.saveToDisk(JSON.stringify({ chatHistory: this.chatHistory }), chatHistoryPath);
-          break;
-        }
-        // Update the cursor for the next request
-        previousCursor = response.cursor;
-      } catch (error) {
-        throw new Error('Something went wrong! ' + error);
-      }
-    }
-    return formatChatHistory(this.chatHistory);
-  }
-
-  private async authenticatePeriscope(): Promise<{ endpoint: string; accessToken: string; }> {
-    // Retrieve the authentication token from Periscope
-    print.info("Retrieving Periscope auth token");
-    const { token: periscopeAuthToken }: { token: string } = (await getRequest(CONSTANTS.PERISCOPE_AUTH_URL, this.headers)).data;
-
-    // Retrieve the cookie from Periscope
-    print.info('Retrieving Periscope cookie');
-
-
-    const { cookie: periscopeCookie }: { cookie: string } = (
-      await postRequest(CONSTANTS.PERISCOPE_LOGIN_URL, this.headers, {
-        create_user: false,
-        direct: true,
-        jwt: periscopeAuthToken,
-        vendor_id: 'm5-proxsee-login-a2011357b73e',
-      })
-    ).data;
-
-    const { access_token: pAccessToken, endpoint: pEndpoint, signer_key: pSignerKey, room_id: pRoomId } = (await postRequest(CONSTANTS.ACCESS_CHAT_URL, this.headers, { chat_token: this.chatToken, cookie: periscopeCookie })).data;
-
-    return { endpoint: pEndpoint + '/chatapi/v1/history', accessToken: pAccessToken }
-  }
-
   async generateSubtitle() {
     print.info('Starting to generate subtitles');
-
     whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}.wav'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
-
-
-    // Note: Do not remove
-    // const { endpoint, accessToken } = await this.authenticatePeriscope();
-    // Fetch Chat History
-    // this.chatHistory = await this.downloadChatHistory(endpoint, accessToken);
-    // whisper();
-    // console.log(this.chatHistory);
-    // const speeches = this.chatHistory.playload
-    // Parse History
-    // Generate subtitle
   }
 
   private async downloadSegments(
@@ -373,16 +282,29 @@ export class Downloader implements DownloaderInterface {
     })
   }
 
+  private async generateImage() {
+
+  }
+
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
     await this.downloadSegments(this.chunksUrls);
     await this.convertSegmentsToWav();
+    this.audioGenerated = true;
   }
 
   async generateVideo() {
+    print.info("Checking if audio has been extracted...");
+    if (!this.audioGenerated) {
+      print.info("Audio has not been extracted! Extracting audio before video generation...");
+      this.generateAudio();
+    };
 
+    
   }
+
+
 
 
   async cleanup() {

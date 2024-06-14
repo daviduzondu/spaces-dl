@@ -4,7 +4,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "rm -r dist; tsc; cp -r src/bin dist/",
+    "build": "rm -r dist; tsc; cp -r src/bin dist/; cp -r src/fonts dist/",
     "start": "tsc --watch --project ./tsconfig.json",
     "dev": "bun src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -23,6 +23,7 @@
   "dependencies": {
     "@types/cheerio": "^0.22.35",
     "axios": "^1.7.2",
+    "canvas": "^2.11.2",
     "chalk": "^5.3.0",
     "cheerio": "^1.0.0-rc.12",
     "commander": "^12.1.0",
