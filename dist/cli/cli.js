@@ -45,6 +45,7 @@ program
 program.parse(process.argv);
 const options = program.opts();
 try {
+    console.log(options);
     const task = await new Downloader(options).init();
     if (options.audio)
         await task.generateAudio();

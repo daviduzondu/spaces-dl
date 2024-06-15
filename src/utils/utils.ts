@@ -3,7 +3,7 @@ import fsPromises from 'fs/promises';
 import chalk from 'chalk';
 import { PassThrough } from 'stream';
 import * as https from 'https';
-import axios, { AxiosHeaders, AxiosRequestHeaders, AxiosResponse } from 'axios';
+import axios, { AxiosHeaders, AxiosRequestHeaders, AxiosResponse, ResponseType } from 'axios';
 import { TaskHeaders, MessageType } from '../types.js';
 
 export async function convertBuffersToMP3(buffers: [], outputFilePath: string) {
@@ -34,10 +34,11 @@ export async function convertBuffersToMP3(buffers: [], outputFilePath: string) {
 }
 
 
-export async function getRequest(url: string, headers: TaskHeaders): Promise<AxiosResponse> {
+export async function getRequest(url: string, headers: TaskHeaders, responseType?: ResponseType): Promise<AxiosResponse> {
   try {
     const response = await axios.get(url, {
       headers,
+      responseType: responseType,
       httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       validateStatus: function (status) {
         return status < 500; // Reject only if the status code is 500 or greater

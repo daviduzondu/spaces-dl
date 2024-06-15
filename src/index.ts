@@ -9,6 +9,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { whisper } from './lib/whisper.js';
 import ffmpeg from 'fluent-ffmpeg';
+import generateImage from './lib/imageGen.js';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -19,7 +20,7 @@ export class Downloader implements DownloaderInterface {
   private password: string;
   private options!: DownloaderOptions;
   private headers: TaskHeaders;
-  private spaceMetadata!: Record<string, any>;
+  private audioSpaceData!: Record<string, any>;
   private mediaKey!: string;
   private m3u8: any;
   private id: string;
@@ -169,9 +170,9 @@ export class Downloader implements DownloaderInterface {
     const variables = CONSTANTS.VARIABLES(this.id);
     const features = CONSTANTS.FEATURES;
     const { data } = (await getRequest(CONSTANTS.SPACE_METADATA_URL(variables, features), this.headers)).data;
-    this.spaceMetadata = data.audioSpace.metadata;
+    this.audioSpaceData = data.audioSpace;
     print.info('Retrieving media key...');
-    this.mediaKey = this.spaceMetadata.media_key;
+    this.mediaKey = this.audioSpaceData.metadata.media_key;
   }
 
   private async getPlaylist() {
@@ -205,7 +206,7 @@ export class Downloader implements DownloaderInterface {
 
   async generateSubtitle() {
     print.info('Starting to generate subtitles');
-    whisper([`--file '${path.join(this.storagePath, 'out/', this.spaceMetadata.title)}.wav'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
+    whisper([`--file '${path.join(this.storagePath, 'out/', this.audioSpaceData.metadata.title)}.wav'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
   }
 
   private async downloadSegments(
@@ -248,7 +249,7 @@ export class Downloader implements DownloaderInterface {
   private async convertSegmentsToWav() {
     await fs.ensureDir(path.join(this.storagePath, 'out/'));
     const passThroughStream = new PassThrough();
-    const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.spaceMetadata.title}.wav`);
+    const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.wav`);
     // const ffmpegCommand = ffmpeg();
     const chunks: string[] = await fs.readdir(path.join(this.storagePath, 'chunks'), { encoding: "utf-8" });
     if (chunks.length === 0) {
@@ -276,16 +277,60 @@ export class Downloader implements DownloaderInterface {
         })
         .on('end', () => {
           resolve();
-          console.log('Conversion to output.wav completed.');
+          print.success('Conversion to output.wav completed.');
         })
         .save(finalOutputFilePath);
     })
   }
 
-  private async generateImage() {
-
+  private async getSpaceImage() {
+    let hostImage: Buffer | null;
+    try {
+      const imgUrl = this.audioSpaceData.metadata.creator_results.result.legacy.profile_image_url_https.replace("normal", '400x400');
+      hostImage = (await getRequest(imgUrl, this.headers, 'arraybuffer')).data;
+      this.saveToDisk(hostImage, 'images/pfp.jpg');
+    } catch (e) {
+      hostImage = null;
+    }
+    let title = this.audioSpaceData.metadata.title;
+    let hostDisplayname = this.audioSpaceData.participants.admins[0].display_name;
+    let hostUsername = this.audioSpaceData.participants.admins[0].twitter_screen_name;
+    let tunedInCount = this.audioSpaceData.metadata.total_live_listeners + this.audioSpaceData.metadata.total_replay_watched;
+    let date = new Date(this.audioSpaceData.metadata.started_at).toLocaleDateString();
+    const buffer = await generateImage(title, hostImage, hostDisplayname, hostUsername, tunedInCount, date);
+    this.saveToDisk(buffer, `images/${this.audioSpaceData.metadata.title}.png`);
   }
 
+  private combineImageAndAudio(imagePath: string, audioPath: string, outputPath: string) {
+    return new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(imagePath)
+        .loop() // Loop the image to match the audio duration
+        .input(audioPath)
+        .audioCodec('aac') // Set audio codec to aac
+        .videoCodec('libx264') // Use libx264 for H.264 encoding
+        .outputOptions('-preset', 'ultrafast') // Use a faster preset
+        .outputOptions('-pix_fmt', 'yuv420p') // Ensure compatibility with most players
+        .outputOptions('-shortest') // Stop encoding when the shortest input ends
+        .outputOptions('-b:v', '1M') // Set video bitrate to 1 Mbps (adjust as needed)
+        .outputOptions('-b:a', '192k') // Set audio bitrate to 192 kbps (adjust as needed)
+        .on("progress", (progress) => {
+          const duration: number = new Date(Number(this.audioSpaceData.metadata.ended_at) - this.audioSpaceData.metadata.started_at).getTime();
+          const datedTimeStamp: number = new Date(`1970-01-01T${progress.timemark}Z`).getTime();
+          print.info('Processing: ' + ((datedTimeStamp / duration) * 100).toFixed(2) + '% done');
+        })
+        .on('end', () => {
+          print.success('Processing finished successfully');
+          resolve();
+        })
+        .on('error', (err) => {
+          print.error('Error during processing: ' + err.message);
+          reject(err);
+        })
+        .save(outputPath);
+    });
+
+  }
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
@@ -296,12 +341,17 @@ export class Downloader implements DownloaderInterface {
 
   async generateVideo() {
     print.info("Checking if audio has been extracted...");
-    if (!this.audioGenerated) {
-      print.info("Audio has not been extracted! Extracting audio before video generation...");
-      this.generateAudio();
-    };
-
-    
+    // if (!this.audioGenerated) {
+    //   print.info("Audio has not been extracted! Extracting audio before video generation...");
+    //   await this.generateAudio();
+    // };
+    print.info("Generating static image");
+    await this.getSpaceImage();
+    await this.combineImageAndAudio(
+      path.join(this.storagePath, 'images', `${this.audioSpaceData.metadata.title}.png`),
+      path.join(this.storagePath, 'out', `${this.audioSpaceData.metadata.title}.wav`),
+      path.join(this.storagePath, 'out', `${this.audioSpaceData.metadata.title}.mp4`)
+    );
   }
 
 

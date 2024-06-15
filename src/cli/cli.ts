@@ -55,6 +55,7 @@ const options: DownloaderOptions = program.opts();
 
 
 try {
+    console.log(options);
     const task: Downloader = await new Downloader(options).init();
     if (options.audio) await task.generateAudio();
     if (options.video) await task.generateVideo();

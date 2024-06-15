@@ -26,10 +26,11 @@ export async function convertBuffersToMP3(buffers, outputFilePath) {
             .save(outputFilePath);
     });
 }
-export async function getRequest(url, headers) {
+export async function getRequest(url, headers, responseType) {
     try {
         const response = await axios.get(url, {
             headers,
+            responseType: responseType,
             httpsAgent: new https.Agent({ rejectUnauthorized: false }),
             validateStatus: function (status) {
                 return status < 500; // Reject only if the status code is 500 or greater

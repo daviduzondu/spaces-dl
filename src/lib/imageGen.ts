@@ -1,22 +1,32 @@
-import { createCanvas, registerFont } from 'canvas';
+import { createCanvas, loadImage } from 'canvas';
 import fsPromises from 'fs-extra';
-const width = 1200;
-const height = 627;
-// Extract the starting Y value for the title's position, which
-// we'll move if we add a second line.
-const titleY = 50;
 
-const canvas = createCanvas(width, height);
+const width = 1920;
+const height = 1080;
+const scaleFactor = 2; // Increase resolution by a factor of 2
+const scaledWidth = width * scaleFactor;
+const scaledHeight = height * scaleFactor;
+const titleY = scaledHeight / 9;
+
+const canvas = createCanvas(scaledWidth, scaledHeight);
 const ctx = canvas.getContext('2d');
 
-ctx.fillStyle = "#000000";
-ctx.fillRect(0, 0, width, height);
+const linearGradient = ctx.createLinearGradient(1000, 700, scaledWidth, 400);
+linearGradient.addColorStop(0, '#2d1bb5');
+linearGradient.addColorStop(0.5, '#511adb');
+// linearGradient.addColorStop(1, 'green');
+
+
+ctx.fillStyle = linearGradient;
+// ctx.fillStyle = "#0f59d1";
+ctx.fillRect(0, 0, scaledWidth, scaledHeight);
 ctx.textDrawingMode = "glyph";
 
-export default async function generateImage(title: string) {
-    ctx.font = 'bold 20pt "Arial"';
+export default async function generateImage(title: string, hostImg: Buffer, hostDisplayName: string, hostUsername: string, tunedInCount: number, date: string) {
+    ctx.textAlign = 'center';
     ctx.fillStyle = "#fff";
     ctx.quality = 'best';
+    ctx.font = `bold ${38 * scaleFactor}pt "Arial"`;
 
     const wrapText = () => {
         const words = title.split(' ');
@@ -25,9 +35,9 @@ export default async function generateImage(title: string) {
 
         for (let i = 1; i < words.length; i++) {
             const word = words[i];
-            const actualBoundingBoxRight = ctx.measureText(currentLine + ' ' + word).actualBoundingBoxRight;
+            const wordWidth = ctx.measureText(currentLine + ' ' + word).width;
 
-            if (actualBoundingBoxRight < width - 30) {
+            if (wordWidth < scaledWidth) {
                 currentLine += ' ' + word;
             } else {
                 lines.push(currentLine);
@@ -35,26 +45,63 @@ export default async function generateImage(title: string) {
             }
         }
         lines.push(currentLine);
-
         return lines.join('\n');
     };
 
-    // Wrap the title text to fit within the specified width
-    title = wrapText(); // Adjust the max width as needed
+    console.log(wrapText());
 
-    // Split the wrapped title into lines
+    title = wrapText();
     const lines = title.split('\n');
-
-    // Draw each line of the wrapped title
     let currentY = titleY;
-    ctx.fillText(title, 30, currentY);
-    // lines.forEach(line => {
-    //     currentY += 30; // Use the line height of 100 pixels for this example
-    // });
+
+    lines.forEach(line => {
+        ctx.fillText(line, scaledWidth / 2, currentY);
+        currentY += 50 * scaleFactor;
+    });
+
+    ctx.font = `${28 * scaleFactor}pt "Arial"`;
+    ctx.fillText(`${tunedInCount} people tuned in • ${date}`, scaledWidth / 2, currentY += 10 * scaleFactor);
+    ctx.font = `bold ${27 * scaleFactor}pt "Arial"`;
+
+    if (hostImg) {
+        const img = await loadImage(hostImg);
+
+        const imgSize = 400 * scaleFactor;
+        const centerX = scaledWidth / 2;
+        const imgY = currentY + 75 * scaleFactor;
+        const radius = imgSize / 2;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, imgY + radius, radius, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.drawImage(img, centerX - radius, imgY, imgSize, imgSize);
+
+        ctx.restore();
+
+        currentY += imgSize + 125 * scaleFactor;
+    } else {
+        currentY += 75 * scaleFactor;
+    }
+
+    ctx.font = `${27 * scaleFactor}pt "Arial"`;
+    ctx.fillText(hostDisplayName, scaledWidth / 2, currentY += 70 * scaleFactor);
+    ctx.font = `${25 * scaleFactor}pt "Arial"`;
+    ctx.fillText(`@${hostUsername}`, scaledWidth / 2, currentY += 45 * scaleFactor);
+    ctx.font = `bold ${23 * scaleFactor}pt "Arial"`;
+    ctx.fillText("Host", scaledWidth / 2, currentY += 40 * scaleFactor);
 
     const buffer = canvas.toBuffer("image/png");
-    await fsPromises.outputFile("./image.png", buffer);
-}
 
-// Example usage:
-generateImage("SUNGAY SERVICE: Genuine Friendships really possible in d 🏳️‍🌈 community?");
+    // Scale down the image to the original size
+    const outputCanvas = createCanvas(width, height);
+    const outputCtx = outputCanvas.getContext('2d');
+    const img = await loadImage(buffer);
+
+    outputCtx.drawImage(img, 0, 0, width, height);
+
+    const outputBuffer = outputCanvas.toBuffer("image/png");
+    return outputBuffer;
+}
