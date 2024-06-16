@@ -217,31 +217,36 @@ export class Downloader implements DownloaderInterface {
 
     // Check cache for the downloaded chunks
 
+    print.info('Starting to download audio chunks')
     for (let url of chunks) {
-      const urlPath = path.basename(url);
-      const chunkStorageLocation: string = path.join('chunks', urlPath);
-      if (!retryCount[urlPath]) retryCount[urlPath] = 0;
+      let message = `Starting to download chunks`;
+      const chunkName = path.basename(url);
+      const chunkStorageLocation: string = path.join('chunks', chunkName);
+      if (!retryCount[chunkName]) retryCount[chunkName] = 0;
       if (await fs.pathExists(path.resolve(this.storagePath + "/" + chunkStorageLocation))) {
         this.downloadChunksCount++;
-        print.info(`${urlPath} already downloaded! Skipped!`);
+        message = `Skipping ${chunkName}`;
+        // print.info(`${urlPath} already downloaded! Skipped!`);
         // break;
       } else {
         try {
+          message = `Downloading ${chunkName}`
           const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
           this.downloadChunksCount++;
-          console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
+          // console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
           await this.saveToDisk(response, chunkStorageLocation);
           // return response;
         } catch (error: any) {
-          if (retryCount[urlPath] >= maxRetries) {
-            throw new Error(`\nFailed to fetch chunk: ${urlPath}. Giving up after ${maxRetries} retries. \n${error.message}`);
+          if (retryCount[chunkName] >= maxRetries) {
+            throw new Error(`\nFailed to fetch chunk: ${chunkName}. Giving up after ${maxRetries} retries. \n${error.message}`);
           }
 
-          retryCount[urlPath] += 1;
-          console.error(`Failed to fetch ${urlPath} .................................. Retrying [${retryCount[urlPath]}/${maxRetries}]`);
+          retryCount[chunkName] += 1;
+          console.error(`Failed to fetch ${chunkName} .................................. Retrying [${retryCount[chunkName]}/${maxRetries}]`);
           return this.downloadSegments([url], retryCount, maxRetries);
         }
       }
+      print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
     }
   }
 
@@ -274,6 +279,12 @@ export class Downloader implements DownloaderInterface {
         .toFormat('wav')        // Set output format to wav
         .on('error', (err) => {
           reject(`Error ${err.message}`);
+        })
+        .on("progress", (progress) => {
+          const duration: number = new Date(Number(this.audioSpaceData.metadata.ended_at) - this.audioSpaceData.metadata.started_at).getTime();
+          const datedTimeStamp: number = new Date(`1970-01-01T${progress.timemark}Z`).getTime();
+          print.progress(datedTimeStamp, duration, "Combining chunks and converting to .wav", "FFMPEG");
+          // print.info('Converting to audio: ' + Math.floor((datedTimeStamp / duration) * 100).toFixed(2) + '% done');
         })
         .on('end', () => {
           resolve();
@@ -341,10 +352,10 @@ export class Downloader implements DownloaderInterface {
 
   async generateVideo() {
     print.info("Checking if audio has been extracted...");
-    // if (!this.audioGenerated) {
-    //   print.info("Audio has not been extracted! Extracting audio before video generation...");
-    //   await this.generateAudio();
-    // };
+    if (!this.audioGenerated) {
+      print.info("Audio has not been extracted! Extracting audio before video generation...");
+      await this.generateAudio();
+    };
     print.info("Generating static image");
     await this.getSpaceImage();
     await this.combineImageAndAudio(

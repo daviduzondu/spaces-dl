@@ -1,6 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import chalk from 'chalk';
 import { PassThrough } from 'stream';
+import readline from 'readline';
 import * as https from 'https';
 import axios from 'axios';
 export async function convertBuffersToMP3(buffers, outputFilePath) {
@@ -49,85 +50,33 @@ export async function getRequest(url, headers, responseType) {
 }
 export const print = {
     info: (message) => {
-        console.log(`${chalk.bgBlue('[INFO]')} ${message}`);
+        console.log(`\n${chalk.bgBlue('[INFO]')} ${message}`);
     },
     warn: (message) => {
-        console.log(`${chalk.bgYellow('[WARN]')} ${message}`);
+        console.log(`\n${chalk.bgYellow('[WARN]')} ${message}`);
     },
     success: (message) => {
-        console.log(`${chalk.bgGreen.black.bold('[SUCCESS]')} ${message}`);
+        console.log(`\n${chalk.bgGreen.black.bold('[SUCCESS]')} ${message}`);
     },
     default: (message) => {
-        console.log(`${chalk.bgBlue('[*]')} ${message}`);
+        console.log(`\n${chalk.bgBlue('[*]')} ${message}`);
     },
     error: (message) => {
-        console.log(`${chalk.bgRed("[ERROR]")} ${message}`);
+        console.log(`\n${chalk.bgRed("[ERROR]")} ${message}`);
+    },
+    progress: (completed, total, message, tag = 'TASK') => {
+        const barLength = 30; // Length of the progress bar
+        const percentage = Number((completed / total).toFixed(2)); // Calculate the percentage completed
+        const completedLength = Math.round(barLength * percentage); // Number of filled slots in the bar
+        const bar = '█'.repeat(completedLength) + '░'.repeat(barLength - completedLength); // Construct the bar
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write(`${chalk.bgYellow.black.bold("[" + tag + "]")} ${message} [${bar}] ${(percentage * 100).toFixed(2)}%`); // Write the bar and the percentage
+        if ((completed >= total)) {
+            console.log("");
+        }
     }
 };
-const getMaxNextLine = (input, maxChars = 20) => {
-    // Split the string into an array of words.
-    const allWords = input.split(" ");
-    // Find the index in the words array at which we should stop or we will exceed
-    // maximum characters.
-    const lineIndex = allWords.reduce((prev, cur, index) => {
-        if (prev?.done)
-            return prev;
-        const endLastWord = prev?.position || 0;
-        const position = endLastWord + 1 + cur.length;
-        return position >= maxChars ? { done: true, index } : { position, index };
-    });
-    // Using the index, build a string for this line ...
-    const line = allWords.slice(0, lineIndex.index).join(" ");
-    // And determine what's left.
-    const remainingChars = allWords.slice(lineIndex.index).join(" ");
-    // Return the result.
-    return { line, remainingChars };
-};
-export function formatTitle(title) {
-    let output = [];
-    // If the title is 40 characters or longer, look to add ellipses at the end of
-    // the second line.
-    if (title.length >= 40) {
-        const firstLine = getMaxNextLine(title);
-        const secondLine = getMaxNextLine(firstLine.remainingChars);
-        output = [firstLine.line];
-        let fmSecondLine = secondLine.line;
-        if (secondLine.remainingChars.length > 0)
-            fmSecondLine += " ...";
-        output.push(fmSecondLine);
-    }
-    // If 20 characters or longer, add the entire second line, using a max of half
-    // the characters, making the first line always slightly shorter than the
-    // second.
-    else if (title.length >= 20) {
-        const firstLine = getMaxNextLine(title, title.length / 2);
-        output = [firstLine.line, firstLine.remainingChars];
-    }
-    // Otherwise, return the short title.
-    else {
-        output = [title];
-    }
-    return output;
-}
-// export function printx(message: string, type: MessageType = 'info'): void {
-//   switch (type) {
-//     case 'info':
-//       console.log(chalk.bgBlueBright('[INFO]')``);
-//       break;
-//     case 'warning':
-//       console.log(chalk.yellow(message));
-//       break;
-//     case 'success':
-//       console.log(chalk.green(message));
-//       break;
-//     case 'error':
-//       console.log(chalk.red(message));
-//       break;
-//     default:
-//       console.log(message);
-//       break;
-//   }
-// }
 // Function to perform POST request with specified headers and data
 export async function postRequest(url, headers, data) {
     try {
