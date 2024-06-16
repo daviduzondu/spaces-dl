@@ -83,7 +83,7 @@ export const print = {
 
     if ((completed >= total)) {
       console.log("");
-    } 
+    }
   }
 };
 
