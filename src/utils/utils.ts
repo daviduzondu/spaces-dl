@@ -73,13 +73,15 @@ export const print = {
     console.log(`\n${chalk.bgRed("[ERROR]")} ${message}`)
   },
   progress: (completed: number, total: number, message: string, tag: string = 'TASK') => {
-    const barLength = 30; // Length of the progress bar
-    const percentage: number = Number((completed / total).toFixed(2)); // Calculate the percentage completed
+    const maxMessageLength = Math.floor(process.stdout.columns * 60 / 100); // 30% of the current width
+    if (message.length > maxMessageLength) message = [message.substring(0, Math.floor(message.length / 4)), '...', message.substring(message.length - 3)].join('');
+    const barLength = Math.floor(maxMessageLength / 5); // Length of the progress bar
+    const percentage: number = Number((completed / total)); // Calculate the percentage completed
     const completedLength = Math.round(barLength * percentage); // Number of filled slots in the bar
     const bar = '█'.repeat(completedLength) + '░'.repeat(barLength - completedLength); // Construct the bar
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);
-    process.stdout.write(`${chalk.bgYellow.black.bold("[" + tag + "]")} ${message} [${bar}] ${(percentage * 100).toFixed(2)}%`); // Write the bar and the percentage
+    process.stdout.write(`${chalk.bgYellow.black.bold("[" + tag + "]")} ${message} [${bar}] ${(percentage * 100).toFixed(2)}% `); // Write the bar and the percentage
 
     if ((completed >= total)) {
       console.log("");
