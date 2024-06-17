@@ -4,7 +4,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "rm -r dist; tsc; cp -r src/bin dist/; cp -r src/fonts dist/",
+    "build": "rm -r dist; tsc;",
     "start": "tsc --watch --project ./tsconfig.json",
     "dev": "bun src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

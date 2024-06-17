@@ -204,10 +204,6 @@ export class Downloader implements DownloaderInterface {
     await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
-  async generateSubtitle() {
-    print.info('Starting to generate subtitles');
-    whisper([`--file '${path.join(this.storagePath, 'out/', this.audioSpaceData.metadata.title)}.wav'`, '-osrt', '--model /home/david/Desktop/Coding/Projects/Web/spaces-dl/models/ggml-base.en.bin']);
-  }
 
   private async downloadSegments(
     chunks: string[],
@@ -312,36 +308,6 @@ export class Downloader implements DownloaderInterface {
     this.saveToDisk(buffer, `images/${this.audioSpaceData.metadata.title}.png`);
   }
 
-  private combineImageAndAudio(imagePath: string, audioPath: string, outputPath: string) {
-    return new Promise<void>((resolve, reject) => {
-      ffmpeg()
-        .input(imagePath)
-        .loop() // Loop the image to match the audio duration
-        .input(audioPath)
-        .audioCodec('aac') // Set audio codec to aac
-        .videoCodec('libx264') // Use libx264 for H.264 encoding
-        .outputOptions('-preset', 'ultrafast') // Use a faster preset
-        .outputOptions('-pix_fmt', 'yuv420p') // Ensure compatibility with most players
-        .outputOptions('-shortest') // Stop encoding when the shortest input ends
-        .outputOptions('-b:v', '1M') // Set video bitrate to 1 Mbps (adjust as needed)
-        .outputOptions('-b:a', '192k') // Set audio bitrate to 192 kbps (adjust as needed)
-        .on("progress", (progress) => {
-          const duration: number = new Date(Number(this.audioSpaceData.metadata.ended_at) - this.audioSpaceData.metadata.started_at).getTime();
-          const datedTimeStamp: number = new Date(`1970-01-01T${progress.timemark}Z`).getTime();
-          print.info('Processing: ' + ((datedTimeStamp / duration) * 100).toFixed(2) + '% done');
-        })
-        .on('end', () => {
-          print.success('Processing finished successfully');
-          resolve();
-        })
-        .on('error', (err) => {
-          print.error('Error during processing: ' + err.message);
-          reject(err);
-        })
-        .save(outputPath);
-    });
-
-  }
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
@@ -349,24 +315,6 @@ export class Downloader implements DownloaderInterface {
     await this.convertSegmentsToWav();
     this.audioGenerated = true;
   }
-
-  async generateVideo() {
-    print.info("Checking if audio has been extracted...");
-    if (!this.audioGenerated) {
-      print.info("Audio has not been extracted! Extracting audio before video generation...");
-      await this.generateAudio();
-    };
-    print.info("Generating static image");
-    await this.getSpaceImage();
-    await this.combineImageAndAudio(
-      path.join(this.storagePath, 'images', `${this.audioSpaceData.metadata.title}.png`),
-      path.join(this.storagePath, 'out', `${this.audioSpaceData.metadata.title}.wav`),
-      path.join(this.storagePath, 'out', `${this.audioSpaceData.metadata.title}.mp4`)
-    );
-  }
-
-
-
 
   async cleanup() {
     print.info("Cleaning up!");
