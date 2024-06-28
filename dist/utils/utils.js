@@ -50,19 +50,19 @@ export async function getRequest(url, headers, responseType) {
 }
 export const print = {
     info: (message) => {
-        console.log(`\n${chalk.bgBlue('[INFO]')} ${message}`);
+        console.log(`${chalk.bgBlue('[INFO]')} ${message}`);
     },
     warn: (message) => {
-        console.log(`\n${chalk.bgYellow('[WARN]')} ${message}`);
+        console.log(`${chalk.bgYellow('[WARN]')} ${message}`);
     },
     success: (message) => {
         console.log(`\n${chalk.bgGreen.black.bold('[SUCCESS]')} ${message}`);
     },
     default: (message) => {
-        console.log(`\n${chalk.bgBlue('[*]')} ${message}`);
+        console.log(`${chalk.bgBlue('[*]')} ${message}`);
     },
     error: (message) => {
-        console.log(`\n${chalk.bgRed("[ERROR]")} ${message}`);
+        console.log(`${chalk.bgRed("[ERROR]")} ${message}`);
     },
     progress: (completed, total, message, tag = 'TASK') => {
         const maxMessageLength = Math.floor(process.stdout.columns * 60 / 100); // 30% of the current width
@@ -90,6 +90,7 @@ export async function postRequest(url, headers, data) {
                 return status < 500; // Reject only if the status code is 500 or greater
             },
         });
+        console.log(response.data);
         return response;
     }
     catch (error) {

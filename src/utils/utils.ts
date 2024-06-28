@@ -58,19 +58,19 @@ export async function getRequest(url: string, headers: TaskHeaders, responseType
 
 export const print = {
   info: (message: string) => {
-    console.log(`\n${chalk.bgBlue('[INFO]')} ${message}`);
+    console.log(`${chalk.bgBlue('[INFO]')} ${message}`);
   },
   warn: (message: string) => {
-    console.log(`\n${chalk.bgYellow('[WARN]')} ${message}`);
+    console.log(`${chalk.bgYellow('[WARN]')} ${message}`);
   },
   success: (message: string) => {
     console.log(`\n${chalk.bgGreen.black.bold('[SUCCESS]')} ${message}`);
   },
   default: (message: string) => {
-    console.log(`\n${chalk.bgBlue('[*]')} ${message}`);
+    console.log(`${chalk.bgBlue('[*]')} ${message}`);
   },
   error: (message: string) => {
-    console.log(`\n${chalk.bgRed("[ERROR]")} ${message}`)
+    console.log(`${chalk.bgRed("[ERROR]")} ${message}`)
   },
   progress: (completed: number, total: number, message: string, tag: string = 'TASK') => {
     const maxMessageLength = Math.floor(process.stdout.columns * 60 / 100); // 30% of the current width
@@ -99,6 +99,7 @@ export async function postRequest(url: string, headers: any, data: {}): Promise<
         return status < 500; // Reject only if the status code is 500 or greater
       },
     });
+    console.log(response.data);
     return response;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {

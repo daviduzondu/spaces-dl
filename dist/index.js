@@ -218,7 +218,7 @@ export class Downloader {
     async convertSegmentsToWav() {
         await fs.ensureDir(path.join(this.storagePath, 'out/'));
         const passThroughStream = new PassThrough();
-        const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.wav`);
+        const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.mp3`);
         // const ffmpegCommand = ffmpeg();
         const chunks = await fs.readdir(path.join(this.storagePath, 'chunks'), { encoding: "utf-8" });
         if (chunks.length === 0) {
@@ -230,27 +230,24 @@ export class Downloader {
         }
         ;
         passThroughStream.end();
-        // Convert .aac to .wav
-        // Taken from https://github.com/ggerganov/whisper.cpp#:~:text=ffmpeg%20%2Di%20input.mp3%20%2Dar%2016000%20%2Dac%201%20%2Dc%3Aa%20pcm_s16le%20output.wav
         await new Promise((resolve, reject) => {
             ffmpeg(passThroughStream)
                 .inputFormat('aac')
-                .audioFrequency(16000) // Set sample rate to 16 kHz
-                .audioChannels(1) // Set audio channels to mono
-                .audioCodec('pcm_s16le') // Set audio codec to pcm_s16le
-                .toFormat('wav') // Set output format to wav
+                .audioFrequency(44100) // Set sample rate to 44.1 kHz for better quality
+                .audioChannels(2) // Set audio channels to stereo
+                .audioCodec('libmp3lame') // Set audio codec to libmp3lame for MP3 encoding
+                .toFormat('mp3') // Set output format to mp3
                 .on('error', (err) => {
-                reject(`Error ${err.message}`);
+                reject(`Error: ${err.message}`);
             })
-                .on("progress", (progress) => {
+                .on('progress', (progress) => {
                 const duration = new Date(Number(this.audioSpaceData.metadata.ended_at) - this.audioSpaceData.metadata.started_at).getTime();
                 const datedTimeStamp = new Date(`1970-01-01T${progress.timemark}Z`).getTime();
-                print.progress(datedTimeStamp, duration, "Combining chunks and converting to .wav", "FFMPEG");
-                // print.info('Converting to audio: ' + Math.floor((datedTimeStamp / duration) * 100).toFixed(2) + '% done');
+                print.progress(datedTimeStamp, duration, "Combining chunks and converting to .mp3", "FFMPEG");
             })
                 .on('end', () => {
                 resolve();
-                print.success('Conversion to output.wav completed.');
+                print.success('Merging completed');
             })
                 .save(finalOutputFilePath);
         });
@@ -279,6 +276,16 @@ export class Downloader {
         await this.downloadSegments(this.chunksUrls);
         await this.convertSegmentsToWav();
         this.audioGenerated = true;
+    }
+    async downloadFromM3U8(url) {
+        this.audioSpaceData = {
+            metadata: {
+                title: "example"
+            }
+        };
+        this.playlistUrl = url;
+        this.chunksUrls = this.parsePlaylist();
+        await this.downloadSegments(this.chunksUrls);
     }
     async cleanup() {
         print.info("Cleaning up!");
