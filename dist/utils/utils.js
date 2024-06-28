@@ -90,7 +90,6 @@ export async function postRequest(url, headers, data) {
                 return status < 500; // Reject only if the status code is 500 or greater
             },
         });
-        console.log(response.data);
         return response;
     }
     catch (error) {

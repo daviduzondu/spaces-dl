@@ -22,18 +22,15 @@ export class Downloader implements DownloaderInterface {
   private headers: TaskHeaders;
   private audioSpaceData!: Record<string, any>;
   private mediaKey!: string;
-  private m3u8: any;
   private id: string;
   private isLoggedIn: boolean = false;
   private $: any;
   private playlist!: string;
   private playlistUrl!: string;
   private chunkBaseUrl!: string;
-  private playlistManifest!: Record<string, any>;
   private downloadChunksCount: number = 0;
   private storagePath;
   private chunksUrls!: string[];
-  private audioGenerated: Boolean = false;
 
   constructor(options: DownloaderOptions) {
     this.options = options;
@@ -193,7 +190,6 @@ export class Downloader implements DownloaderInterface {
     const parser = new m3u8Parser.Parser();
     parser.push(this.playlist);
     parser.end();
-    this.playlistManifest = parser.manifest;
     return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
   }
 
@@ -244,7 +240,7 @@ export class Downloader implements DownloaderInterface {
   }
 
 
-  private async convertSegmentsToWav() {
+  private async convertSegmentsToMp3() {
     await fs.ensureDir(path.join(this.storagePath, 'out/'));
     const passThroughStream = new PassThrough();
     const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.mp3`);
@@ -286,19 +282,7 @@ export class Downloader implements DownloaderInterface {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
     await this.downloadSegments(this.chunksUrls);
-    await this.convertSegmentsToWav();
-    this.audioGenerated = true;
-  }
-
-  async downloadFromM3U8(url: string) {
-    this.audioSpaceData = {
-      metadata: {
-        title: "example"
-      }
-    }
-    this.playlistUrl = url;
-    this.chunksUrls = this.parsePlaylist();
-    await this.downloadSegments(this.chunksUrls);
+    await this.convertSegmentsToMp3();
   }
 
   async cleanup() {

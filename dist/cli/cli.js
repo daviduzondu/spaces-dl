@@ -5,7 +5,6 @@ program
     .name('spaces-dl')
     .description('CLI to download recorded Twitter Spaces')
     .version('0.0.1')
-    .option('-a, --audio', 'generate audio')
     .option('-m, --m3u8', 'm3u8 file url')
     .option('-i, --id <id>', 'A valid ID for a recorded Twitter Space')
     .option('-u, --username <username>', 'a valid twitter username without the @')
@@ -22,16 +21,8 @@ const options = program.opts();
 try {
     console.log(options);
     let task;
-    if (!options.m3u8) {
-        task = await new Downloader(options).init();
-    }
-    else {
-        options.id = 'somethingxxx';
-        task = await new Downloader(options);
-        await task.downloadFromM3U8(options.m3u8);
-    }
-    if (options.audio)
-        await task.generateAudio();
+    task = await new Downloader(options).init();
+    await task.generateAudio();
     await task.cleanup();
 }
 catch (error) {

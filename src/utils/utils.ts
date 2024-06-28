@@ -99,7 +99,6 @@ export async function postRequest(url: string, headers: any, data: {}): Promise<
         return status < 500; // Reject only if the status code is 500 or greater
       },
     });
-    console.log(response.data);
     return response;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {

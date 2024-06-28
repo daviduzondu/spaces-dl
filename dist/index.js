@@ -7,7 +7,6 @@ import { getRequest, postRequest, print } from './utils/utils.js';
 import fs from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
-import generateImage from './lib/imageGen.js';
 export class Downloader {
     username;
     password;
@@ -15,20 +14,15 @@ export class Downloader {
     headers;
     audioSpaceData;
     mediaKey;
-    m3u8;
     id;
     isLoggedIn = false;
     $;
     playlist;
     playlistUrl;
     chunkBaseUrl;
-    playlistManifest;
     downloadChunksCount = 0;
     storagePath;
     chunksUrls;
-    chatToken;
-    chatHistory = [];
-    audioGenerated = false;
     constructor(options) {
         this.options = options;
         this.username = options.username;
@@ -49,7 +43,6 @@ export class Downloader {
         await this.setSpaceMetadataAndMediaKey();
         const playListInfoResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
         this.playlistUrl = playListInfoResponse.data.source.location;
-        this.chatToken = playListInfoResponse.data.chatToken;
         this.chunkBaseUrl = this.playlistUrl.replace(path.basename(this.playlistUrl), '');
         return this;
     }
@@ -173,7 +166,6 @@ export class Downloader {
         const parser = new m3u8Parser.Parser();
         parser.push(this.playlist);
         parser.end();
-        this.playlistManifest = parser.manifest;
         return parser.manifest.segments.map((x) => this.chunkBaseUrl + x.uri);
     }
     async saveToDisk(data, location) {
@@ -215,7 +207,7 @@ export class Downloader {
             print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
         }
     }
-    async convertSegmentsToWav() {
+    async convertSegmentsToMp3() {
         await fs.ensureDir(path.join(this.storagePath, 'out/'));
         const passThroughStream = new PassThrough();
         const finalOutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.mp3`);
@@ -252,40 +244,11 @@ export class Downloader {
                 .save(finalOutputFilePath);
         });
     }
-    async getSpaceImage() {
-        let hostImage;
-        try {
-            const imgUrl = this.audioSpaceData.metadata.creator_results.result.legacy.profile_image_url_https.replace("normal", '400x400');
-            hostImage = (await getRequest(imgUrl, this.headers, 'arraybuffer')).data;
-            this.saveToDisk(hostImage, 'images/pfp.jpg');
-        }
-        catch (e) {
-            hostImage = null;
-        }
-        let title = this.audioSpaceData.metadata.title;
-        let hostDisplayname = this.audioSpaceData.participants.admins[0].display_name;
-        let hostUsername = this.audioSpaceData.participants.admins[0].twitter_screen_name;
-        let tunedInCount = this.audioSpaceData.metadata.total_live_listeners + this.audioSpaceData.metadata.total_replay_watched;
-        let date = new Date(this.audioSpaceData.metadata.started_at).toLocaleDateString();
-        const buffer = await generateImage(title, hostImage, hostDisplayname, hostUsername, tunedInCount, date);
-        this.saveToDisk(buffer, `images/${this.audioSpaceData.metadata.title}.png`);
-    }
     async generateAudio() {
         this.playlist = await this.getPlaylist();
         this.chunksUrls = this.parsePlaylist();
         await this.downloadSegments(this.chunksUrls);
-        await this.convertSegmentsToWav();
-        this.audioGenerated = true;
-    }
-    async downloadFromM3U8(url) {
-        this.audioSpaceData = {
-            metadata: {
-                title: "example"
-            }
-        };
-        this.playlistUrl = url;
-        this.chunksUrls = this.parsePlaylist();
-        await this.downloadSegments(this.chunksUrls);
+        await this.convertSegmentsToMp3();
     }
     async cleanup() {
         print.info("Cleaning up!");
