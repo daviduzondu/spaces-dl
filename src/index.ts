@@ -3,13 +3,11 @@ import axios, { Axios, AxiosRequestHeaders, AxiosResponse } from 'axios';
 import cheerio from 'cheerio';
 import m3u8Parser from 'm3u8-parser';
 import { PassThrough } from 'stream';
-import { convertBuffersToMP3, getRequest, postRequest, print } from './utils/utils.js';
-import { ChatMessage, DownloaderOptions, Message, TaskHeaders } from './types.js';
-import fs from 'fs-extra';
+import { getRequest, postRequest, print } from './utils/utils.js';
+import { DownloaderOptions, TaskHeaders } from './types.js';
+import fs, { outputFile } from 'fs-extra';
 import path from 'path';
-import { whisper } from './lib/whisper.js';
 import ffmpeg from 'fluent-ffmpeg';
-import generateImage from './lib/imageGen.js';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -18,7 +16,7 @@ interface DownloaderInterface {
 export class Downloader implements DownloaderInterface {
   private username: string;
   private password: string;
-  private options!: DownloaderOptions;
+  // private options!: DownloaderOptions;
   private headers: TaskHeaders;
   private audioSpaceData!: Record<string, any>;
   private mediaKey!: string;
@@ -31,13 +29,16 @@ export class Downloader implements DownloaderInterface {
   private downloadChunksCount: number = 0;
   private storagePath;
   private chunksUrls!: string[];
+  private output?: string;
 
   constructor(options: DownloaderOptions) {
-    this.options = options;
+    // this.options = options;
     this.username = options.username;
     this.password = options.password;
     this.id = options.id;
-    this.storagePath = path.resolve(`./task-${this.id}/`);
+    this.output = options.output;
+    this.storagePath = path.resolve(`${this.output}/task-${this.id}/`);
+    console.log(this.storagePath);
 
     this.headers = {
       'User-Agent': 'curl/7.81.0',

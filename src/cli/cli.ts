@@ -26,9 +26,9 @@ const options: DownloaderOptions = program.opts();
 
 
 try {
-    console.log(options);
     let task: Downloader;
     task = await new Downloader(options).init();
+    if (!options.output) options.output = '.';
     await task.generateAudio();
     await task.cleanup();
 } catch (error) {

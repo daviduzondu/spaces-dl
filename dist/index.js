@@ -23,12 +23,15 @@ export class Downloader {
     downloadChunksCount = 0;
     storagePath;
     chunksUrls;
+    output;
     constructor(options) {
         this.options = options;
         this.username = options.username;
         this.password = options.password;
         this.id = options.id;
-        this.storagePath = path.resolve(`./task-${this.id}/`);
+        this.output = options.output;
+        this.storagePath = path.resolve(`${this.output}/task-${this.id}/`);
+        console.log(this.storagePath);
         this.headers = {
             'User-Agent': 'curl/7.81.0',
             'accept': "*/*",

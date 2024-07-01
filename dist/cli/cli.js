@@ -19,9 +19,10 @@ program
 program.parse(process.argv);
 const options = program.opts();
 try {
-    console.log(options);
     let task;
     task = await new Downloader(options).init();
+    if (!options.output)
+        options.output = '.';
     await task.generateAudio();
     await task.cleanup();
 }
