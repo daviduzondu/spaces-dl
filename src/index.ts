@@ -228,7 +228,7 @@ export class Downloader implements DownloaderInterface {
       case 'linux':
         return '/usr/bin/google-chrome';
       default:
-        throw new Error('Unsupported platform');
+        throw new Error('Chrome not installed on your machine');
     }
   }
 
