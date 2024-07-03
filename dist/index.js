@@ -93,6 +93,8 @@ export class Downloader {
                         await this.loginWithPuppeteer();
                         return;
                     }
+                    throw new Error("Something went wrong! Unable to login!");
+                    // break;
                 }
                 if (nextSubtask === 'LoginJsInstrumentationSubtask') {
                     taskInputs = { flow_token: flowToken, ...CONSTANTS.LOGIN_FLOW_SUBTASK_DATA[nextSubtask].input };
@@ -275,9 +277,8 @@ export class Downloader {
                 try {
                     const retryMessage = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
                     message = `${retryMessage}Downloading ${chunkName}`;
-                    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 300 });
+                    const response = await axios.get(url, { responseType: 'arraybuffer' });
                     this.downloadChunksCount++;
-                    console.log(response.status);
                     await this.saveToDisk(Buffer.from(response.data), chunkStorageLocation);
                     // return response;
                 }

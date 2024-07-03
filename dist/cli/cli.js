@@ -26,6 +26,7 @@ try {
     let task;
     if (!options.output)
         options.output = process.cwd();
+    console.log(options);
     task = await new Downloader(options).init();
     await task.generateAudio();
     await task.cleanup();
