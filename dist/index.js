@@ -63,7 +63,6 @@ export class Downloader {
             this.headers['X-Guest-Token'] = await this.getGuestToken();
             this.headers["Authorization"] = CONSTANTS.BEARER;
             // Initialize login flow:
-            print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
             let taskResponse;
             let taskInputs = CONSTANTS.LOGIN_FLOW_SUBTASK_DATA[''].input;
             taskResponse = (await postRequest(CONSTANTS.URL_FLOW_1, this.headers, JSON.stringify(taskInputs)));
@@ -77,13 +76,19 @@ export class Downloader {
                 .split(';')[0];
             this.setHeaders({ cookie: `att=${att}` });
             while (!this.isLoggedIn) {
-                if (Object.keys(CONSTANTS.LOGIN_FLOW_SUBTASK_DATA).find(x => x === nextSubtask)) {
+                if (this.options.browserLogin) {
+                    await this.loginWithPuppeteer();
+                    return;
+                }
+                else {
+                    print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
+                }
+                if (Object.keys(CONSTANTS.LOGIN_FLOW_SUBTASK_DATA).find(x => x === nextSubtask) && !this.options.browserLogin) {
                     print.info(`Performing next subtask: ${nextSubtask}`);
                 }
                 else {
                     print.error(`Subtask ${nextSubtask} not recognized.`);
                     if (!this.options.disableBrowserLogin) {
-                        print.info(`Attempting to login with browser. Enter in your login details when browser launches`);
                         await this.loginWithPuppeteer();
                         return;
                     }
@@ -145,6 +150,7 @@ export class Downloader {
             throw new Error(`@${this.options.username} is currently suspended`);
     }
     async loginWithPuppeteer() {
+        print.info(`Attempting to login with browser. Enter in your login details when browser launches`);
         const browser = await puppeteer.launch({
             headless: false,
             executablePath: '/usr/bin/google-chrome',

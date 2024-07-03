@@ -13,6 +13,7 @@ program
     .option('-p, --password <password>', 'a valid password for the username')
     .option('-o, --output <path>', 'output path for the recorded audio/video')
     .option("-d, --disable-browser-login", 'disable logging in with browser if logging in with username and password fails')
+    .option("-b, --browser-login", 'login with browser instead (great for privacy)')
     .action((options) => {
     if (!options.id && !options.m3u8) {
         print.error("Error: --id option required");

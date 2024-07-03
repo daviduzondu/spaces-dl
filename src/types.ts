@@ -3,6 +3,7 @@ export interface DownloaderOptions {
     password: string,
     id: string,
     output: string
+    browserLogin?: boolean,
     disableBrowserLogin?: boolean
     m3u8?: string,
 }
