@@ -105,6 +105,7 @@ export class Downloader implements DownloaderInterface {
             await this.loginWithPuppeteer();
             return;
           }
+          throw new Error("Something went wrong! Unable to login!");
         }
 
         if (nextSubtask === 'LoginJsInstrumentationSubtask') {
