@@ -1,10 +1,10 @@
 {
-  "name": "spaces-dlp",
+  "name": "spaces-dl",
   "version": "1.0.0",
   "type": "module",
   "main": "./",
   "bin": {
-    "spaces-dl": "./dist/cli/cli.js"
+    "spaces-dl": "dist/cli/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -12,8 +12,8 @@
     "dev": "tsx src/cli/cli.ts"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "David",
+  "license": "MIT",
   "description": "",
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.24",
