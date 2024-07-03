@@ -11,7 +11,7 @@ import fs, { outputFile } from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import puppeteer from 'puppeteer-core';
-import resolvePath from 'resolve-path';
+import { exec } from 'child_process';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -169,7 +169,7 @@ export class Downloader implements DownloaderInterface {
     print.info(`Attempting to login with browser. Enter in your login details when browser launches`);
     const browser = await puppeteer.launch({
       headless: false,
-      executablePath: '/usr/bin/google-chrome',
+      executablePath: await this.getChromePath(),
       args: ["--disable-infobars"]
     });
 
@@ -208,6 +208,28 @@ export class Downloader implements DownloaderInterface {
 
     // Close the browser after everything is done
     await browser.close();
+  }
+
+  private getChromePath() {
+    switch (os.platform()) {
+      case 'win32':
+        return new Promise<string>((resolve, reject) => {
+          exec('where chrome', (err, stdout, stderr) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            const chromePath = stdout.trim().split('\r\n')[0];
+            resolve(chromePath);
+          });
+        });
+      case 'darwin':
+        return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+      case 'linux':
+        return '/usr/bin/google-chrome';
+      default:
+        throw new Error('Unsupported platform');
+    }
   }
 
   private setHeaders(h: Record<string, any>): void {
