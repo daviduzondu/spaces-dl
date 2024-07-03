@@ -12,7 +12,7 @@ const program = new Command();
 program
     .name('spaces-dl')
     .description('CLI to download recorded Twitter Spaces')
-    .version('1.0.0')
+    .version('1.0.3')
     .option('-m, --m3u8', 'm3u8 file url')
     .option('-i, --id <id>', 'A valid ID for a recorded Twitter Space')
     .option('-u, --username <username>', 'a valid twitter username without the @')
