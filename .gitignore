@@ -1,0 +1,14 @@
+node_modules
+.vscode
+.config
+task-*
+models
+out
+logs
+1jMJgmQnggPKL
+*.mp3
+*.mp4
+*.wav
+*.srt
+*.png
+~
