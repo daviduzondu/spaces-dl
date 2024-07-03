@@ -1,6 +1,6 @@
 # spaces-dl
 
-A dead CLI tool to download recorded Twitter Spaces.
+A dead simple CLI tool to download recorded Twitter Spaces.
 
 ## Installation
 
