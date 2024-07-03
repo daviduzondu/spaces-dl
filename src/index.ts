@@ -312,10 +312,9 @@ export class Downloader implements DownloaderInterface {
         try {
           const retryMessage: string = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
           message = `${retryMessage}Downloading ${chunkName}`
-          const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
+          const response = await axios.get(url, { responseType: 'arraybuffer' });
           this.downloadChunksCount++;
-          // console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
-          await this.saveToDisk(response, chunkStorageLocation);
+          await this.saveToDisk(Buffer.from(response.data), chunkStorageLocation);
           // return response;
         } catch (error: any) {
           if (retryCount[chunkName] >= maxRetries) {
@@ -373,7 +372,7 @@ export class Downloader implements DownloaderInterface {
     this.chunksUrls = this.parsePlaylist();
     print.info('Starting to download audio chunks');
     await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
-    await this.convertSegmentsToMp3();
+    if (this.downloadChunksCount === this.chunksUrls.length) await this.convertSegmentsToMp3();
   }
 
   async cleanup() {

@@ -38,7 +38,7 @@ export class Downloader {
         this.storagePath = path.join(this.output, `/task-${this.id}/`);
         console.log('Writing to ', this.storagePath);
         this.headers = {
-            'User-Agent': 'curl/7.81.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.100 Safari/537.36',
             'accept': "*/*",
             Referer: 'https://twitter.com/',
             'Content-Type': 'application/json',
@@ -275,10 +275,10 @@ export class Downloader {
                 try {
                     const retryMessage = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
                     message = `${retryMessage}Downloading ${chunkName}`;
-                    const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
+                    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 300 });
                     this.downloadChunksCount++;
-                    // console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
-                    await this.saveToDisk(response, chunkStorageLocation);
+                    console.log(response.status);
+                    await this.saveToDisk(Buffer.from(response.data), chunkStorageLocation);
                     // return response;
                 }
                 catch (error) {
@@ -333,7 +333,8 @@ export class Downloader {
         this.chunksUrls = this.parsePlaylist();
         print.info('Starting to download audio chunks');
         await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
-        await this.convertSegmentsToMp3();
+        if (this.downloadChunksCount === this.chunksUrls.length)
+            await this.convertSegmentsToMp3();
     }
     async cleanup() {
         const finalFilePath = path.resolve(this.mp3OutputFilePath, '../../..', path.basename(this.mp3OutputFilePath));
