@@ -10,6 +10,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import puppeteer from 'puppeteer-core';
+import { exec } from 'child_process';
 export class Downloader {
     username;
     password;
@@ -75,14 +76,14 @@ export class Downloader {
                 .split('att=')[1]
                 .split(';')[0];
             this.setHeaders({ cookie: `att=${att}` });
+            if (this.options.browserLogin) {
+                await this.loginWithPuppeteer();
+                return;
+            }
+            else {
+                print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
+            }
             while (!this.isLoggedIn) {
-                if (this.options.browserLogin) {
-                    await this.loginWithPuppeteer();
-                    return;
-                }
-                else {
-                    print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
-                }
                 if (Object.keys(CONSTANTS.LOGIN_FLOW_SUBTASK_DATA).find(x => x === nextSubtask) && !this.options.browserLogin) {
                     print.info(`Performing next subtask: ${nextSubtask}`);
                 }
@@ -153,7 +154,7 @@ export class Downloader {
         print.info(`Attempting to login with browser. Enter in your login details when browser launches`);
         const browser = await puppeteer.launch({
             headless: false,
-            executablePath: '/usr/bin/google-chrome',
+            executablePath: await this.getChromePath(),
             args: ["--disable-infobars"]
         });
         const page = await browser.newPage();
@@ -186,6 +187,27 @@ export class Downloader {
         print.success("Login Success!");
         // Close the browser after everything is done
         await browser.close();
+    }
+    getChromePath() {
+        switch (os.platform()) {
+            case 'win32':
+                return new Promise((resolve, reject) => {
+                    exec('where chrome', (err, stdout, stderr) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+                        const chromePath = stdout.trim().split('\r\n')[0];
+                        resolve(chromePath);
+                    });
+                });
+            case 'darwin':
+                return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+            case 'linux':
+                return '/usr/bin/google-chrome';
+            default:
+                throw new Error('Chrome not installed on your machine');
+        }
     }
     setHeaders(h) {
         this.headers = { ...this.headers, ...h };
@@ -235,11 +257,10 @@ export class Downloader {
     async saveToDisk(data, location) {
         await fs.outputFile(path.join(this.storagePath + '/' + location), data);
     }
-    async downloadSegments(chunks, retryCount = {}, maxRetries = 10) {
+    async downloadSegments(chunks, retryCount = {}, maxRetries = 10, message) {
         // Check cache for the downloaded chunks
-        print.info('Starting to download audio chunks');
         for (let url of chunks) {
-            let message = `Starting to download chunks`;
+            print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
             const chunkName = path.basename(url);
             const chunkStorageLocation = path.join('chunks', chunkName);
             if (!retryCount[chunkName])
@@ -252,7 +273,8 @@ export class Downloader {
             }
             else {
                 try {
-                    message = `Downloading ${chunkName}`;
+                    const retryMessage = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
+                    message = `${retryMessage}Downloading ${chunkName}`;
                     const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
                     this.downloadChunksCount++;
                     // console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
@@ -264,11 +286,9 @@ export class Downloader {
                         throw new Error(`\nFailed to fetch chunk: ${chunkName}. Giving up after ${maxRetries} retries. \n${error.message}`);
                     }
                     retryCount[chunkName] += 1;
-                    console.error(`Failed to fetch ${chunkName} .................................. Retrying [${retryCount[chunkName]}/${maxRetries}]`);
-                    return this.downloadSegments([url], retryCount, maxRetries);
+                    return this.downloadSegments([url], retryCount, maxRetries, message);
                 }
             }
-            print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
         }
     }
     async convertSegmentsToMp3() {
@@ -311,7 +331,8 @@ export class Downloader {
     async generateAudio() {
         this.playlist = await this.getPlaylist();
         this.chunksUrls = this.parsePlaylist();
-        await this.downloadSegments(this.chunksUrls);
+        print.info('Starting to download audio chunks');
+        await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
         await this.convertSegmentsToMp3();
     }
     async cleanup() {

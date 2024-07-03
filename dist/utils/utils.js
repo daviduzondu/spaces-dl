@@ -62,7 +62,7 @@ export const print = {
         console.log(`${chalk.bgBlue('[*]')} ${message}`);
     },
     error: (message) => {
-        console.log(`${chalk.bgRed("[ERROR]")} ${message}`);
+        console.log(`\n${chalk.bgRed("[ERROR]")} ${message}`);
     },
     progress: (completed, total, message, tag = 'TASK') => {
         const maxMessageLength = Math.floor(process.stdout.columns * 60 / 100); // 30% of the current width

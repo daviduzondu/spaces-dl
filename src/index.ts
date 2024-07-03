@@ -45,7 +45,7 @@ export class Downloader implements DownloaderInterface {
     this.storagePath = path.join(this.output, `/task-${this.id}/`,);
     console.log('Writing to ', this.storagePath)
     this.headers = {
-      'User-Agent': 'curl/7.81.0',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.100 Safari/537.36',
       'accept': "*/*",
       Referer: 'https://twitter.com/',
       'Content-Type': 'application/json',
@@ -89,15 +89,14 @@ export class Downloader implements DownloaderInterface {
       this.setHeaders({ cookie: `att=${att}` });
 
 
+      if (this.options.browserLogin) {
+        await this.loginWithPuppeteer();
+        return;
+      } else {
+        print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
+      }
+
       while (!this.isLoggedIn) {
-        if (this.options.browserLogin) {
-          await this.loginWithPuppeteer();
-          return;
-        } else {
-          print.info('Attempting to login with username and password. Make sure 2FA is disabled on your account');
-        }
-
-
         if (Object.keys(CONSTANTS.LOGIN_FLOW_SUBTASK_DATA).find(x => x === nextSubtask) && !this.options.browserLogin) {
           print.info(`Performing next subtask: ${nextSubtask}`);
         } else {
@@ -293,14 +292,14 @@ export class Downloader implements DownloaderInterface {
   private async downloadSegments(
     chunks: string[],
     retryCount: Record<string, number> = {},
-    maxRetries: number = 10
+    maxRetries: number = 10,
+    message: string
   ): Promise<void> {
 
     // Check cache for the downloaded chunks
 
-    print.info('Starting to download audio chunks')
     for (let url of chunks) {
-      let message = `Starting to download chunks`;
+      print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
       const chunkName = path.basename(url);
       const chunkStorageLocation: string = path.join('chunks', chunkName);
       if (!retryCount[chunkName]) retryCount[chunkName] = 0;
@@ -311,7 +310,8 @@ export class Downloader implements DownloaderInterface {
         // break;
       } else {
         try {
-          message = `Downloading ${chunkName}`
+          const retryMessage: string = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
+          message = `${retryMessage}Downloading ${chunkName}`
           const response = Buffer.from((await axios.get(url, { responseType: 'arraybuffer' })).data);
           this.downloadChunksCount++;
           // console.log(`Downloaded ${urlPath} ........................................ ${((this.downloadChunksCount / this.chunksUrls.length) * 100).toFixed(2)}% done`);
@@ -323,11 +323,9 @@ export class Downloader implements DownloaderInterface {
           }
 
           retryCount[chunkName] += 1;
-          console.error(`Failed to fetch ${chunkName} .................................. Retrying [${retryCount[chunkName]}/${maxRetries}]`);
-          return this.downloadSegments([url], retryCount, maxRetries);
+          return this.downloadSegments([url], retryCount, maxRetries, message);
         }
       }
-      print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
     }
   }
 
@@ -373,7 +371,8 @@ export class Downloader implements DownloaderInterface {
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
-    await this.downloadSegments(this.chunksUrls);
+    print.info('Starting to download audio chunks');
+    await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
     await this.convertSegmentsToMp3();
   }
 

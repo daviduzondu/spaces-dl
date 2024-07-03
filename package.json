@@ -7,7 +7,7 @@
     "spaces-dl": "./dist/cli/cli.js"
   },
   "scripts": {
-    "build": "rm -r dist; tsc;",
+    "build": "tsc",
     "start": "tsc --watch --project ./tsconfig.json",
     "dev": "tsx src/cli/cli.ts"
   },
