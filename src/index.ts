@@ -11,7 +11,7 @@ import fs, { outputFile } from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import puppeteer from 'puppeteer-core';
-import { exec } from 'child_process';
+import Registry from 'winreg';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -214,16 +214,14 @@ export class Downloader implements DownloaderInterface {
   private getChromePath() {
     switch (os.platform()) {
       case 'win32':
-        return new Promise<string>((resolve, reject) => {
-          exec('where chrome', (err, stdout, stderr) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            const chromePath = stdout.trim().split('\r\n')[0];
-            resolve(chromePath);
-          });
+        const regKey = new Registry({
+          hive: Registry.HKCU,
+          key: '\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe'
         });
+        regKey.get('', (err, item) => {
+          if (err) throw new Error("Failed to find Chrome on your machine.");
+          return item.value;
+        })
       case 'darwin':
         return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
       case 'linux':
