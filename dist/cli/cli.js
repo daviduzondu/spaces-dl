@@ -6,7 +6,7 @@ const program = new Command();
 program
     .name('spaces-dl')
     .description('CLI to download recorded Twitter Spaces')
-    .version('1.0.3')
+    .version('1.0.4')
     .option('-m, --m3u8', 'm3u8 file url')
     .option('-i, --id <id>', 'A valid ID for a recorded Twitter Space')
     .option('-u, --username <username>', 'a valid twitter username without the @')
@@ -32,6 +32,5 @@ try {
 }
 catch (error) {
     print.error(error);
-    // console.error(errxor);
     process.exit(1);
 }
