@@ -7,11 +7,10 @@ import m3u8Parser from 'm3u8-parser';
 import { PassThrough } from 'stream';
 import { getRequest, postRequest, print } from './utils/utils.js';
 import { DownloaderOptions, TaskHeaders } from './types.js';
-import fs, { outputFile } from 'fs-extra';
+import fs from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import puppeteer from 'puppeteer-core';
-import Registry from 'winreg';
 
 interface DownloaderInterface {
   [key: string]: any
@@ -42,8 +41,7 @@ export class Downloader implements DownloaderInterface {
     this.password = options.password;
     this.id = options.id;
     this.output = options.output.replace('~/', `/${os.homedir()}/`);
-    this.storagePath = path.join(this.output, `/task-${this.id}/`,);
-    console.log('Writing to ', this.storagePath)
+    this.storagePath = path.join(this.output, `task-${this.id}`,);
     this.headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.100 Safari/537.36',
       'accept': "*/*",
@@ -54,14 +52,27 @@ export class Downloader implements DownloaderInterface {
   }
 
   async init(): Promise<Downloader> {
-    print.info("Starting authentication flow")
     // await this.loginWithPuppeteer();
-    await this.login();
-    await this.checkUser();
-    print.info(`Retrieving space metadata: [${this.id}]`);
-    await this.setSpaceMetadataAndMediaKey();
-    const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
-    this.playlistUrl = playListInfoResponse.data.source.location;
+    if (!(await fs.pathExists(path.join(this.storagePath, "/",  'task-metadata.json')))) {
+      const taskMetaData : Record<string, any>= {};
+      print.info("Starting authentication flow");
+      await this.login();
+      await this.checkUser();
+      print.info(`Retrieving space metadata: [${this.id}]`);
+      await this.setSpaceMetadataAndMediaKey();
+      const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
+      this.playlistUrl = playListInfoResponse.data.source.location;
+      
+      print.info('Saving task metadata to disk');
+      taskMetaData['audioSpaceData'] = this.audioSpaceData;
+      taskMetaData['playlistUrl'] = this.playlistUrl;
+      // Store the task metadata for later;
+      await this.saveToDisk(JSON.stringify(taskMetaData), 'task-metadata.json');
+    } else {
+      const {audioSpaceData, playlistUrl} = await fs.readJson(path.join(this.storagePath, "/", "task-metadata.json"));
+      this.playlistUrl = playlistUrl;
+      this.audioSpaceData = audioSpaceData;
+    }
     this.chunkBaseUrl = this.playlistUrl.replace(path.basename(this.playlistUrl), '');
     return this;
   }
@@ -212,20 +223,22 @@ export class Downloader implements DownloaderInterface {
   }
 
   private getChromePath() {
-    switch (os.platform()) {
+    const platform = os.platform();
+    const arch = os.arch();
+  
+    switch (platform) {
       case 'win32':
-        const regKey = new Registry({
-          hive: Registry.HKCU,
-          key: '\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe'
-        });
-        regKey.get('', (err, item) => {
-          if (err) throw new Error("Failed to find Chrome on your machine.");
-          return item.value;
-        })
+        return arch === 'x64' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' :
+               arch === 'x32' ? 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' :
+               'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'; // Default to 64-bit path
+  
       case 'darwin':
         return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  
       case 'linux':
-        return '/usr/bin/google-chrome';
+        return arch === 'arm' ? '/usr/bin/google-chrome' :
+               '/usr/bin/google-chrome'; // Default to standard path
+  
       default:
         throw new Error('Chrome not installed on your machine');
     }
@@ -264,14 +277,11 @@ export class Downloader implements DownloaderInterface {
     let playlist: string;
 
     if (await fs.pathExists(playlistPath)) {
-      print.info('Playlist already downloaded!');
+      print.info('M3U8 Playlist already downloaded!');
       return await fs.readFile(playlistPath, { encoding: "utf-8" });
-      // return;
     }
 
     print.info('Downloading playlist');
-    console.log(this.playlistUrl);
-
     playlist = (await getRequest(this.playlistUrl, this.headers)).data;
     await this.saveToDisk(playlist, `playlist.m3u8`);
     return playlist;
@@ -284,13 +294,13 @@ export class Downloader implements DownloaderInterface {
     return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
   }
 
-  private async saveToDisk(data: any, location: string) {
+  private async saveToDisk(data: string | Buffer , location: string) {
     await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
 
   private async downloadSegments(
-    chunks: string[],
+    chunksUrls: string[],
     retryCount: Record<string, number> = {},
     maxRetries: number = 10,
     message: string
@@ -298,7 +308,7 @@ export class Downloader implements DownloaderInterface {
 
     // Check cache for the downloaded chunks
 
-    for (let url of chunks) {
+    for (let url of chunksUrls) {
       print.progress(this.downloadChunksCount, this.chunksUrls.length, message, "AUDIO");
       const chunkName = path.basename(url);
       const chunkStorageLocation: string = path.join('chunks', chunkName);
@@ -306,44 +316,47 @@ export class Downloader implements DownloaderInterface {
       if (await fs.pathExists(path.resolve(this.storagePath + "/" + chunkStorageLocation))) {
         this.downloadChunksCount++;
         message = `Skipping ${chunkName}`;
-        // print.info(`${urlPath} already downloaded! Skipped!`);
-        // break;
       } else {
         try {
           const retryMessage: string = retryCount[chunkName] ? `[${retryCount[chunkName]}/${maxRetries}] ` : "";
-          message = `${retryMessage}Downloading ${chunkName}`
+          message = `${retryMessage}Downloading ${chunkName}`;
           const response = await axios.get(url, { responseType: 'arraybuffer' });
           this.downloadChunksCount++;
           await this.saveToDisk(Buffer.from(response.data), chunkStorageLocation);
-          // return response;
         } catch (error: any) {
           if (retryCount[chunkName] >= maxRetries) {
             throw new Error(`\nFailed to fetch chunk: ${chunkName}. Giving up after ${maxRetries} retries. \n${error.message}`);
           }
-
-          retryCount[chunkName] += 1;
-          return this.downloadSegments([url], retryCount, maxRetries, message);
+          if (axios.isAxiosError(error)) {
+            retryCount[chunkName] += 1;
+            return this.downloadSegments([url], retryCount, maxRetries, message);
+          }
+          throw new Error("Something went wrong. Try again!");
         }
       }
     }
   }
+  private cleanTitle(title:string):string{
+    // Cleaning up the title is essential, because some titles can have special characters or emojis that might make it difficult to save the file to the correct path or transfer the file.
+      var pattern = /[^\w\s]/g;
 
-
-  private async convertSegmentsToMp3() {
-    await fs.ensureDir(path.join(this.storagePath, 'out/'));
+      // Replace matched characters with '-'
+      return title.replaceAll(pattern, '-');
+  }
+  private async convertSegmentsToMp3():Promise<void> {
+    await fs.ensureDir(path.join(this.storagePath, 'out'));
     const passThroughStream = new PassThrough();
-    this.mp3OutputFilePath = path.join(this.storagePath, 'out/', `${this.audioSpaceData.metadata.title}.mp3`);
-    // const ffmpegCommand = ffmpeg();
+    this.mp3OutputFilePath = path.join(this.storagePath, 'out', `${this.cleanTitle(this.audioSpaceData.metadata.title)}.mp3`);
     const chunks: string[] = await fs.readdir(path.join(this.storagePath, 'chunks'), { encoding: "utf-8" });
     if (chunks.length === 0) {
       throw new Error('Failed to fetch chunks saved on disk.');
     }
     for (const chunkPath of chunks) {
-      passThroughStream.write(await fs.readFile(path.join(this.storagePath, 'chunks/', chunkPath)));
-      // ffmpegCommand.input(path.join(this.storagePath, 'chunks/', chunkPath))
+      passThroughStream.write(await fs.readFile(path.join(this.storagePath, 'chunks', chunkPath)));
     };
-    passThroughStream.end();
+    const outputStream = fs.createWriteStream(this.mp3OutputFilePath);
 
+    passThroughStream.end();
     await new Promise<void>((resolve, reject) => {
       ffmpeg(passThroughStream)
         .inputFormat('aac')
@@ -363,24 +376,25 @@ export class Downloader implements DownloaderInterface {
           resolve();
           print.success('Merging completed');
         })
-        .save(this.mp3OutputFilePath);
+        .stream(outputStream);
     });
   }
 
   async generateAudio() {
     this.playlist = await this.getPlaylist();
     this.chunksUrls = this.parsePlaylist();
-    print.info('Starting to download audio chunks');
+    if (await fs.pathExists(path.join(this.storagePath, '/', 'chunks'))) print.info("Resuming audio chunks download...");
+    else print.info('Starting to download audio chunks...');
     await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
     if (this.downloadChunksCount === this.chunksUrls.length) await this.convertSegmentsToMp3();
   }
 
   async cleanup() {
-    const finalFilePath = path.resolve(this.mp3OutputFilePath, '../../..', path.basename(this.mp3OutputFilePath));
-    // con
-    await fs.move(this.mp3OutputFilePath, finalFilePath);
-    // await fs.rm(this.storagePath, { recursive: true, force: true });
     print.info("Cleaning up!");
+    const finalFilePath = path.resolve(this.mp3OutputFilePath, '../../..', path.basename(this.mp3OutputFilePath));
+    await fs.move(this.mp3OutputFilePath, finalFilePath);
+    print.info(`Output file written to: ${finalFilePath}`);
+    await fs.rm(this.storagePath, {recursive:true, force:true});
     print.success("Done!");
   }
 }

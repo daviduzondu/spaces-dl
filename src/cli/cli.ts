@@ -35,11 +35,10 @@ const options: DownloaderOptions = program.opts();
 try {
     let task: Downloader;
     if (!options.output) options.output = process.cwd();
-    console.log(options)
     task = await new Downloader(options).init();
     await task.generateAudio();
     await task.cleanup();
 } catch (error: any) {
-    print.error(error.message);
+    print.error(error);
     process.exit(1);
 }
