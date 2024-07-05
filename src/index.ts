@@ -53,8 +53,8 @@ export class Downloader implements DownloaderInterface {
 
   async init(): Promise<Downloader> {
     // await this.loginWithPuppeteer();
-    if (!(await fs.pathExists(path.join(this.storagePath, "/",  'task-metadata.json')))) {
-      const taskMetaData : Record<string, any>= {};
+    if (!(await fs.pathExists(path.join(this.storagePath, "/", 'task-metadata.json')))) {
+      const taskMetaData: Record<string, any> = {};
       print.info("Starting authentication flow");
       await this.login();
       await this.checkUser();
@@ -62,14 +62,14 @@ export class Downloader implements DownloaderInterface {
       await this.setSpaceMetadataAndMediaKey();
       const playListInfoResponse: AxiosResponse = await getRequest(CONSTANTS.PLAYLIST_INFO_URL(this.mediaKey), this.headers);
       this.playlistUrl = playListInfoResponse.data.source.location;
-      
+
       print.info('Saving task metadata to disk');
       taskMetaData['audioSpaceData'] = this.audioSpaceData;
       taskMetaData['playlistUrl'] = this.playlistUrl;
       // Store the task metadata for later;
       await this.saveToDisk(JSON.stringify(taskMetaData), 'task-metadata.json');
     } else {
-      const {audioSpaceData, playlistUrl} = await fs.readJson(path.join(this.storagePath, "/", "task-metadata.json"));
+      const { audioSpaceData, playlistUrl } = await fs.readJson(path.join(this.storagePath, "/", "task-metadata.json"));
       this.playlistUrl = playlistUrl;
       this.audioSpaceData = audioSpaceData;
     }
@@ -225,20 +225,20 @@ export class Downloader implements DownloaderInterface {
   private getChromePath() {
     const platform = os.platform();
     const arch = os.arch();
-  
+
     switch (platform) {
       case 'win32':
         return arch === 'x64' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' :
-               arch === 'x32' ? 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' :
-               'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'; // Default to 64-bit path
-  
+          arch === 'x32' ? 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' :
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'; // Default to 64-bit path
+
       case 'darwin':
         return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  
+
       case 'linux':
         return arch === 'arm' ? '/usr/bin/google-chrome' :
-               '/usr/bin/google-chrome'; // Default to standard path
-  
+          '/usr/bin/google-chrome'; // Default to standard path
+
       default:
         throw new Error('Chrome not installed on your machine');
     }
@@ -294,7 +294,7 @@ export class Downloader implements DownloaderInterface {
     return parser.manifest.segments.map((x: { uri: string }) => this.chunkBaseUrl + x.uri);
   }
 
-  private async saveToDisk(data: string | Buffer , location: string) {
+  private async saveToDisk(data: string | Buffer, location: string) {
     await fs.outputFile(path.join(this.storagePath + '/' + location), data);
   }
 
@@ -325,6 +325,7 @@ export class Downloader implements DownloaderInterface {
           await this.saveToDisk(Buffer.from(response.data), chunkStorageLocation);
         } catch (error: any) {
           if (retryCount[chunkName] >= maxRetries) {
+            // console.log(error);
             throw new Error(`\nFailed to fetch chunk: ${chunkName}. Giving up after ${maxRetries} retries. \n${error.message}`);
           }
           if (axios.isAxiosError(error)) {
@@ -336,14 +337,14 @@ export class Downloader implements DownloaderInterface {
       }
     }
   }
-  private cleanTitle(title:string):string{
+  private cleanTitle(title: string): string {
     // Cleaning up the title is essential, because some titles can have special characters or emojis that might make it difficult to save the file to the correct path or transfer the file.
-      var pattern = /[^\w\s]/g;
+    var pattern = /[^\w\s]/g;
 
-      // Replace matched characters with '-'
-      return title.replaceAll(pattern, '-');
+    // Replace matched characters with '-'
+    return title.replaceAll(pattern, '-');
   }
-  private async convertSegmentsToMp3():Promise<void> {
+  private async convertSegmentsToMp3(): Promise<void> {
     await fs.ensureDir(path.join(this.storagePath, 'out'));
     const passThroughStream = new PassThrough();
     this.mp3OutputFilePath = path.join(this.storagePath, 'out', `${this.cleanTitle(this.audioSpaceData.metadata.title)}.mp3`);
@@ -386,15 +387,17 @@ export class Downloader implements DownloaderInterface {
     if (await fs.pathExists(path.join(this.storagePath, '/', 'chunks'))) print.info("Resuming audio chunks download...");
     else print.info('Starting to download audio chunks...');
     await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
-    if (this.downloadChunksCount === this.chunksUrls.length) await this.convertSegmentsToMp3();
+    await this.convertSegmentsToMp3()
+    return this;
+    // if (this.downloadChunksCount === this.chunksUrls.length) await this.convertSegmentsToMp3();
   }
 
-  async cleanup() {
+  cleanup() {
     print.info("Cleaning up!");
     const finalFilePath = path.resolve(this.mp3OutputFilePath, '../../..', path.basename(this.mp3OutputFilePath));
-    await fs.move(this.mp3OutputFilePath, finalFilePath);
+    fs.moveSync(this.mp3OutputFilePath, finalFilePath);
     print.info(`Output file written to: ${finalFilePath}`);
-    await fs.rm(this.storagePath, {recursive:true, force:true});
+    fs.rmSync(this.storagePath, { recursive: true, force: true });
     print.success("Done!");
   }
 }

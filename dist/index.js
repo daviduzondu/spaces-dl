@@ -286,6 +286,7 @@ export class Downloader {
                 }
                 catch (error) {
                     if (retryCount[chunkName] >= maxRetries) {
+                        // console.log(error);
                         throw new Error(`\nFailed to fetch chunk: ${chunkName}. Giving up after ${maxRetries} retries. \n${error.message}`);
                     }
                     if (axios.isAxiosError(error)) {
@@ -347,15 +348,16 @@ export class Downloader {
         else
             print.info('Starting to download audio chunks...');
         await this.downloadSegments(this.chunksUrls, {}, 10, 'Initializing');
-        if (this.downloadChunksCount === this.chunksUrls.length)
-            await this.convertSegmentsToMp3();
+        await this.convertSegmentsToMp3();
+        return this;
+        // if (this.downloadChunksCount === this.chunksUrls.length) await this.convertSegmentsToMp3();
     }
-    async cleanup() {
+    cleanup() {
         print.info("Cleaning up!");
         const finalFilePath = path.resolve(this.mp3OutputFilePath, '../../..', path.basename(this.mp3OutputFilePath));
-        await fs.move(this.mp3OutputFilePath, finalFilePath);
+        fs.moveSync(this.mp3OutputFilePath, finalFilePath);
         print.info(`Output file written to: ${finalFilePath}`);
-        await fs.rm(this.storagePath, { recursive: true, force: true });
+        fs.rmSync(this.storagePath, { recursive: true, force: true });
         print.success("Done!");
     }
 }

@@ -3,16 +3,14 @@
 import { Command } from 'commander';
 import { Downloader } from '../index.js';
 import { DownloaderOptions } from '../types.js';
-import path from 'path';
 import { print } from '../utils/utils.js';
-import { BROWSER_LIST } from '../constants/constants.js';
 const program = new Command();
 
 
 program
     .name('spaces-dl')
     .description('CLI to download recorded Twitter Spaces')
-    .version('1.0.4')
+    .version('1.0.5')
     .option('-m, --m3u8', 'm3u8 file url')
     .option('-i, --id <id>', 'A valid ID for a recorded Twitter Space')
     .option('-u, --username <username>', 'a valid twitter username without the @')
@@ -36,8 +34,7 @@ try {
     let task: Downloader;
     if (!options.output) options.output = process.cwd();
     task = await new Downloader(options).init();
-    await task.generateAudio();
-    await task.cleanup();
+    (await task.generateAudio()).cleanup();
 } catch (error: any) {
     print.error(error);
     process.exit(1);
