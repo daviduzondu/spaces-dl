@@ -117,7 +117,7 @@ export class Downloader implements DownloaderInterface {
             return;
           }
           throw new Error("Something went wrong! Unable to login!");
-          // break;
+          
         }
 
         if (nextSubtask === 'LoginJsInstrumentationSubtask') {
